@@ -2,9 +2,10 @@ package config
 
 import "log/slog"
 
-// ServiceConfig holds ohome-specific config. Storage backends (redis, s3,
-// mongo, db) are loaded by butterfly core from the same yaml file via
-// `store.*` and accessed through `butterfly.orx.me/core/store/{redis,s3,...}`.
+// ServiceConfig holds ohome-specific config. All storage backends
+// (postgres / redis / mongo / s3) are loaded by butterfly core from the
+// `store.*` block of the same yaml file and accessed via
+// `butterfly.orx.me/core/store/{sqldb,redis,mongo,s3}`.
 type ServiceConfig struct {
 	Environment string     `yaml:"environment"`
 	HTTPPort    int        `yaml:"http_port"`

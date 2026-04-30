@@ -1,7 +1,7 @@
 APP_NAME := ohome
 BUILD_DIR := bin
 
-.PHONY: tidy proto proto-lint build run clean docker-build
+.PHONY: tidy proto proto-lint ent build run clean docker-build
 
 tidy:
 	go mod tidy
@@ -11,6 +11,9 @@ proto:
 
 proto-lint:
 	buf lint
+
+ent:
+	go run -mod=mod entgo.io/ent/cmd/ent generate --target ./internal/dao/ent ./internal/dao/ent/schema
 
 build:
 	mkdir -p $(BUILD_DIR)
