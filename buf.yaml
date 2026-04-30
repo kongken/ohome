@@ -1,0 +1,15 @@
+version: v2
+modules:
+  - path: proto
+breaking:
+  use:
+    - FILE
+lint:
+  use:
+    - STANDARD
+  except:
+    # Allow shared request/response types across RPCs (e.g. shared User/Post)
+    # to keep the proto surface compact. Tighten later as the API stabilizes.
+    - RPC_REQUEST_RESPONSE_UNIQUE
+    - RPC_REQUEST_STANDARD_NAME
+    - RPC_RESPONSE_STANDARD_NAME

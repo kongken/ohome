@@ -1,0 +1,29 @@
+environment: "local"
+http_port: 8080
+
+log:
+  level: "info"
+  format: "text"
+  add_source: false
+
+otel: {}
+
+auth:
+  jwt_secret: "change-me-in-production"
+  access_token_ttl: "1h"
+  refresh_token_ttl: "720h"
+
+store:
+  redis:
+    default:
+      addr: "127.0.0.1:6379"
+      password: ""
+      db: 0
+  s3:
+    media:
+      endpoint: ""
+      access_key_id: ""
+      secret_access_key: ""
+      region: "us-east-1"
+      bucket: "ohome-media"
+      use_ssl: true

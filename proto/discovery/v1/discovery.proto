@@ -1,0 +1,138 @@
+syntax = "proto3";
+
+package discovery.v1;
+
+import "common/v1/types.proto";
+import "communities/v1/communities.proto";
+import "posts/v1/posts.proto";
+import "users/v1/users.proto";
+
+option go_package = "github.com/kongken/ohome/pkg/proto/discovery/v1;discoveryv1";
+
+// DiscoveryService powers the Discovery screen and global search.
+//
+// HTTP mapping (see api.md §7):
+//   GET /api/v1/discover/highlights
+//   GET /api/v1/discover/trending/posts
+//   GET /api/v1/discover/trending/topics
+//   GET /api/v1/discover/suggested-users
+//   GET /api/v1/discover/communities
+//   GET /api/v1/discover/discussions
+//   GET /api/v1/discover/categories
+//   GET /api/v1/search
+//   GET /api/v1/search/suggest
+service DiscoveryService {
+  rpc GetHighlights(GetHighlightsRequest) returns (GetHighlightsResponse);
+  rpc TrendingPosts(TrendingPostsRequest) returns (posts.v1.ListPostsResponse);
+  rpc TrendingTopics(TrendingTopicsRequest) returns (TrendingTopicsResponse);
+  rpc SuggestedUsers(SuggestedUsersRequest) returns (SuggestedUsersResponse);
+  rpc SuggestedCommunities(SuggestedCommunitiesRequest) returns (communities.v1.ListCommunitiesResponse);
+  rpc LiveDiscussions(LiveDiscussionsRequest) returns (LiveDiscussionsResponse);
+  rpc Categories(CategoriesRequest) returns (CategoriesResponse);
+
+  rpc Search(SearchRequest) returns (SearchResponse);
+  rpc Suggest(SuggestRequest) returns (SuggestResponse);
+}
+
+message Highlight {
+  string id = 1;
+  string kind = 2; // collection | trend | discussion
+  string title = 3;
+  string description = 4;
+  string image_url = 5;
+  string link = 6;
+  map<string, string> meta = 7;
+}
+
+message GetHighlightsRequest {}
+message GetHighlightsResponse {
+  repeated Highlight items = 1;
+}
+
+message TrendingPostsRequest {
+  common.v1.PageRequest page = 1;
+}
+
+message TrendingTopic {
+  string tag = 1;
+  string title = 2;
+  int64 posts_count = 3;
+  string image_url = 4;
+}
+message TrendingTopicsRequest {
+  common.v1.PageRequest page = 1;
+}
+message TrendingTopicsResponse {
+  repeated TrendingTopic items = 1;
+  common.v1.PageResponse page = 2;
+}
+
+message SuggestedUsersRequest {
+  common.v1.PageRequest page = 1;
+}
+message SuggestedUsersResponse {
+  repeated users.v1.User items = 1;
+  common.v1.PageResponse page = 2;
+}
+
+message SuggestedCommunitiesRequest {
+  common.v1.PageRequest page = 1;
+}
+
+message LiveDiscussion {
+  string id = 1;
+  string title = 2;
+  string description = 3;
+  int64 participants_count = 4;
+  repeated string participant_avatars = 5;
+  bool is_live = 6;
+  string link = 7;
+}
+message LiveDiscussionsRequest {
+  common.v1.PageRequest page = 1;
+}
+message LiveDiscussionsResponse {
+  repeated LiveDiscussion items = 1;
+  common.v1.PageResponse page = 2;
+}
+
+message Category {
+  string key = 1;
+  string label = 2;
+  string icon = 3;
+  string link = 4;
+}
+message CategoriesRequest {}
+message CategoriesResponse {
+  repeated Category items = 1;
+}
+
+enum SearchType {
+  SEARCH_TYPE_UNSPECIFIED = 0;
+  SEARCH_TYPE_ALL = 1;
+  SEARCH_TYPE_USERS = 2;
+  SEARCH_TYPE_POSTS = 3;
+  SEARCH_TYPE_COMMUNITIES = 4;
+  SEARCH_TYPE_TAGS = 5;
+}
+
+message SearchRequest {
+  string q = 1;
+  SearchType type = 2;
+  common.v1.PageRequest page = 3;
+}
+message SearchResponse {
+  repeated users.v1.User users = 1;
+  repeated posts.v1.Post posts = 2;
+  repeated communities.v1.Community communities = 3;
+  repeated TrendingTopic tags = 4;
+  common.v1.PageResponse page = 5;
+}
+
+message SuggestRequest {
+  string q = 1;
+  int32 limit = 2;
+}
+message SuggestResponse {
+  repeated string items = 1;
+}

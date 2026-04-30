@@ -1,0 +1,90 @@
+syntax = "proto3";
+
+package auth.v1;
+
+import "users/v1/users.proto";
+
+option go_package = "github.com/kongken/ohome/pkg/proto/auth/v1;authv1";
+
+// AuthService handles registration, login, token lifecycle, password and
+// email verification.
+//
+// HTTP mapping (see api.md §1):
+//   POST /api/v1/auth/register
+//   POST /api/v1/auth/login
+//   POST /api/v1/auth/logout
+//   POST /api/v1/auth/refresh
+//   POST /api/v1/auth/password/forgot
+//   POST /api/v1/auth/password/reset
+//   POST /api/v1/auth/password/change
+//   POST /api/v1/auth/email/verify-request
+//   POST /api/v1/auth/email/verify
+//   GET  /api/v1/auth/me
+service AuthService {
+  rpc Register(RegisterRequest) returns (TokenPair);
+  rpc Login(LoginRequest) returns (TokenPair);
+  rpc Logout(LogoutRequest) returns (LogoutResponse);
+  rpc Refresh(RefreshRequest) returns (TokenPair);
+  rpc ForgotPassword(ForgotPasswordRequest) returns (ForgotPasswordResponse);
+  rpc ResetPassword(ResetPasswordRequest) returns (ResetPasswordResponse);
+  rpc ChangePassword(ChangePasswordRequest) returns (ChangePasswordResponse);
+  rpc RequestEmailVerification(RequestEmailVerificationRequest) returns (RequestEmailVerificationResponse);
+  rpc VerifyEmail(VerifyEmailRequest) returns (VerifyEmailResponse);
+  rpc Me(MeRequest) returns (users.v1.User);
+}
+
+message RegisterRequest {
+  string full_name = 1;
+  string email = 2;
+  string username = 3;
+  string password = 4;
+  bool accept_terms = 5;
+}
+
+message LoginRequest {
+  string email = 1;
+  string password = 2;
+  bool remember_me = 3;
+}
+
+message LogoutRequest {}
+message LogoutResponse {}
+
+message RefreshRequest {
+  string refresh_token = 1;
+}
+
+message TokenPair {
+  string access_token = 1;
+  string refresh_token = 2;
+  string token_type = 3; // "Bearer"
+  int64 expires_in = 4;
+  users.v1.User user = 5;
+}
+
+message ForgotPasswordRequest {
+  string email = 1;
+}
+message ForgotPasswordResponse {}
+
+message ResetPasswordRequest {
+  string reset_token = 1;
+  string new_password = 2;
+}
+message ResetPasswordResponse {}
+
+message ChangePasswordRequest {
+  string current_password = 1;
+  string new_password = 2;
+}
+message ChangePasswordResponse {}
+
+message RequestEmailVerificationRequest {}
+message RequestEmailVerificationResponse {}
+
+message VerifyEmailRequest {
+  string token = 1;
+}
+message VerifyEmailResponse {}
+
+message MeRequest {}

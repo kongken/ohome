@@ -1,0 +1,158 @@
+syntax = "proto3";
+
+package posts.v1;
+
+import "common/v1/types.proto";
+import "users/v1/users.proto";
+
+option go_package = "github.com/kongken/ohome/pkg/proto/posts/v1;postsv1";
+
+// PostService powers the Social Feed: composer, feed listing, post detail,
+// likes, comments, bookmarks and shares.
+//
+// HTTP mapping (see api.md §4):
+//   GET    /api/v1/feed
+//   GET    /api/v1/posts/{id}
+//   POST   /api/v1/posts
+//   PATCH  /api/v1/posts/{id}
+//   DELETE /api/v1/posts/{id}
+//   POST   /api/v1/posts/{id}/like
+//   DELETE /api/v1/posts/{id}/like
+//   POST   /api/v1/posts/{id}/share
+//   POST   /api/v1/posts/{id}/bookmark
+//   DELETE /api/v1/posts/{id}/bookmark
+//   GET    /api/v1/posts/{id}/comments
+//   POST   /api/v1/posts/{id}/comments
+service PostService {
+  rpc GetFeed(GetFeedRequest) returns (ListPostsResponse);
+  rpc GetPost(GetPostRequest) returns (Post);
+  rpc CreatePost(CreatePostRequest) returns (Post);
+  rpc UpdatePost(UpdatePostRequest) returns (Post);
+  rpc DeletePost(DeletePostRequest) returns (DeletePostResponse);
+
+  rpc LikePost(LikePostRequest) returns (PostStats);
+  rpc UnlikePost(UnlikePostRequest) returns (PostStats);
+  rpc SharePost(SharePostRequest) returns (PostStats);
+  rpc BookmarkPost(BookmarkPostRequest) returns (BookmarkResponse);
+  rpc UnbookmarkPost(UnbookmarkPostRequest) returns (BookmarkResponse);
+  rpc ListBookmarks(ListBookmarksRequest) returns (ListPostsResponse);
+
+  rpc ListComments(ListCommentsRequest) returns (ListCommentsResponse);
+  rpc CreateComment(CreateCommentRequest) returns (Comment);
+  rpc DeleteComment(DeleteCommentRequest) returns (DeleteCommentResponse);
+  rpc LikeComment(LikeCommentRequest) returns (Comment);
+  rpc UnlikeComment(UnlikeCommentRequest) returns (Comment);
+}
+
+message Post {
+  string id = 1;
+  users.v1.User author = 2;
+  CommunityRef community = 3;
+  string content = 4;
+  repeated common.v1.MediaRef media = 5;
+  repeated string hashtags = 6;
+  string visibility = 7; // public | followers | private
+  string created_at = 8;
+  PostStats stats = 9;
+  PostViewer viewer = 10;
+}
+
+message CommunityRef {
+  string id = 1;
+  string name = 2;
+  string icon_url = 3;
+}
+
+message PostStats {
+  int64 likes = 1;
+  int64 comments = 2;
+  int64 shares = 3;
+}
+
+message PostViewer {
+  bool liked = 1;
+  bool bookmarked = 2;
+  bool shared = 3;
+}
+
+message Comment {
+  string id = 1;
+  string post_id = 2;
+  string parent_id = 3;
+  users.v1.User author = 4;
+  string content = 5;
+  int64 likes = 6;
+  bool liked = 7;
+  string created_at = 8;
+}
+
+enum FeedScope {
+  FEED_SCOPE_UNSPECIFIED = 0;
+  FEED_SCOPE_FOR_YOU = 1;
+  FEED_SCOPE_FOLLOWING = 2;
+  FEED_SCOPE_COMMUNITY = 3;
+}
+
+message GetFeedRequest {
+  FeedScope scope = 1;
+  string community_id = 2;
+  common.v1.PageRequest page = 3;
+}
+
+message ListPostsResponse {
+  repeated Post items = 1;
+  common.v1.PageResponse page = 2;
+}
+
+message GetPostRequest { string id = 1; }
+
+message CreatePostRequest {
+  string content = 1;
+  repeated string media_ids = 2;
+  repeated string hashtags = 3;
+  string community_id = 4;
+  string event_id = 5;
+  string visibility = 6;
+}
+
+message UpdatePostRequest {
+  string id = 1;
+  optional string content = 2;
+  repeated string hashtags = 3;
+  optional string visibility = 4;
+}
+
+message DeletePostRequest { string id = 1; }
+message DeletePostResponse {}
+
+message LikePostRequest { string post_id = 1; }
+message UnlikePostRequest { string post_id = 1; }
+message SharePostRequest { string post_id = 1; }
+
+message BookmarkPostRequest { string post_id = 1; }
+message UnbookmarkPostRequest { string post_id = 1; }
+message BookmarkResponse {}
+
+message ListBookmarksRequest {
+  common.v1.PageRequest page = 1;
+}
+
+message ListCommentsRequest {
+  string post_id = 1;
+  string parent_id = 2;
+  common.v1.PageRequest page = 3;
+}
+message ListCommentsResponse {
+  repeated Comment items = 1;
+  common.v1.PageResponse page = 2;
+}
+
+message CreateCommentRequest {
+  string post_id = 1;
+  string parent_id = 2;
+  string content = 3;
+}
+message DeleteCommentRequest { string id = 1; }
+message DeleteCommentResponse {}
+message LikeCommentRequest { string id = 1; }
+message UnlikeCommentRequest { string id = 1; }

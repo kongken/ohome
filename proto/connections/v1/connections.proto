@@ -1,0 +1,79 @@
+syntax = "proto3";
+
+package connections.v1;
+
+import "common/v1/types.proto";
+import "users/v1/users.proto";
+
+option go_package = "github.com/kongken/ohome/pkg/proto/connections/v1;connectionsv1";
+
+// ConnectionService covers follow / unfollow and connection-request flows
+// surfaced on Profile and Dashboard screens.
+//
+// HTTP mapping (see api.md §3):
+//   POST   /api/v1/users/{username}/follow
+//   DELETE /api/v1/users/{username}/follow
+//   GET    /api/v1/users/{username}/followers
+//   GET    /api/v1/users/{username}/following
+//   GET    /api/v1/connections
+//   DELETE /api/v1/connections/{user_id}
+//   GET    /api/v1/connections/requests
+//   POST   /api/v1/connections/requests
+//   POST   /api/v1/connections/requests/{id}/accept
+//   POST   /api/v1/connections/requests/{id}/reject
+service ConnectionService {
+  rpc Follow(FollowRequest) returns (FollowResponse);
+  rpc Unfollow(UnfollowRequest) returns (UnfollowResponse);
+  rpc ListFollowers(ListFollowersRequest) returns (ListUsersResponse);
+  rpc ListFollowing(ListFollowingRequest) returns (ListUsersResponse);
+  rpc ListConnections(ListConnectionsRequest) returns (ListUsersResponse);
+  rpc RemoveConnection(RemoveConnectionRequest) returns (RemoveConnectionResponse);
+  rpc ListRequests(ListRequestsRequest) returns (ListRequestsResponse);
+  rpc CreateRequest(CreateRequestRequest) returns (ConnectionRequest);
+  rpc AcceptRequest(AcceptRequestRequest) returns (ConnectionRequest);
+  rpc RejectRequest(RejectRequestRequest) returns (ConnectionRequest);
+}
+
+message ConnectionRequest {
+  string id = 1;
+  users.v1.User from_user = 2;
+  users.v1.User to_user = 3;
+  string status = 4; // pending | accepted | rejected
+  string created_at = 5;
+}
+
+message FollowRequest { string username = 1; }
+message FollowResponse {}
+message UnfollowRequest { string username = 1; }
+message UnfollowResponse {}
+
+message ListUsersResponse {
+  repeated users.v1.User items = 1;
+  common.v1.PageResponse page = 2;
+}
+
+message ListFollowersRequest {
+  string username = 1;
+  common.v1.PageRequest page = 2;
+}
+message ListFollowingRequest {
+  string username = 1;
+  common.v1.PageRequest page = 2;
+}
+message ListConnectionsRequest {
+  common.v1.PageRequest page = 1;
+}
+message RemoveConnectionRequest { string user_id = 1; }
+message RemoveConnectionResponse {}
+
+message ListRequestsRequest {
+  common.v1.PageRequest page = 1;
+}
+message ListRequestsResponse {
+  repeated ConnectionRequest items = 1;
+  common.v1.PageResponse page = 2;
+}
+
+message CreateRequestRequest { string to_user_id = 1; }
+message AcceptRequestRequest { string id = 1; }
+message RejectRequestRequest { string id = 1; }

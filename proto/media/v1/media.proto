@@ -1,0 +1,36 @@
+syntax = "proto3";
+
+package media.v1;
+
+import "common/v1/types.proto";
+
+option go_package = "github.com/kongken/ohome/pkg/proto/media/v1;mediav1";
+
+// MediaService handles media uploads referenced by posts, avatars, photos.
+//
+// HTTP mapping (see api.md §5):
+//   POST /api/v1/media/uploads
+//   POST /api/v1/media/uploads/presign
+//   GET  /api/v1/media/{id}
+service MediaService {
+  rpc Presign(PresignRequest) returns (PresignResponse);
+  rpc GetMedia(GetMediaRequest) returns (common.v1.MediaRef);
+}
+
+message PresignRequest {
+  string filename = 1;
+  string content_type = 2;
+  int64 size_bytes = 3;
+  string usage = 4; // avatar | cover | post | photo
+}
+
+message PresignResponse {
+  string media_id = 1;
+  string upload_url = 2;
+  string method = 3; // PUT
+  map<string, string> headers = 4;
+  string public_url = 5;
+  int64 expires_in = 6;
+}
+
+message GetMediaRequest { string id = 1; }
