@@ -1,14 +1,18 @@
 package http
 
 import (
+	"log/slog"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+
+	"github.com/kongken/ohome/internal/auth"
+	"github.com/kongken/ohome/internal/config"
 )
 
 // RegisterRoutes wires HTTP handlers onto the gin engine. Domain handlers
-// will be registered into the /api/v1 group as they are implemented.
-func RegisterRoutes(r *gin.Engine) {
+// are mounted under `/api/v1`. See api.md for the full route catalog.
+func RegisterRoutes(r *gin.Engine, cfg *config.ServiceConfig) {
 	r.Use(corsMiddleware())
 
 	r.GET("/health", func(c *gin.Context) {
@@ -23,8 +27,16 @@ func RegisterRoutes(r *gin.Engine) {
 		c.JSON(http.StatusOK, gin.H{"message": "pong"})
 	})
 
-	// Domain handlers (auth, users, posts, ...) are registered here once
-	// implemented. See api.md for the full route list.
+	issuer, err := auth.NewIssuer(cfg.Auth)
+	if err != nil {
+		// Fatal at boot — without an issuer no auth-protected route can work.
+		// Log loudly; fall through so /health still returns OK for probes.
+		slog.Error("auth issuer init failed", "error", err)
+	} else {
+		auth.NewHandler(issuer).Register(v1.Group("/auth"))
+	}
+
+	// Future domain handlers (users, posts, ...) registered here.
 }
 
 func corsMiddleware() gin.HandlerFunc {
