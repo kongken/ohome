@@ -21,7 +21,10 @@ func main() {
 		Service:   "ohome",
 		Config:    svcConfig,
 		Router: func(r *gin.Engine) {
-			apihttp.RegisterRoutes(r, svcConfig)
+			if err := apihttp.RegisterRoutes(r, svcConfig); err != nil {
+				slog.Error("route registration failed", "error", err)
+				panic(err)
+			}
 		},
 		InitFunc: []func() error{
 			initDAO,
