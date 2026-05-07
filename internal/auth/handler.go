@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 
@@ -16,6 +17,8 @@ import (
 	entuser "github.com/kongken/ohome/internal/dao/ent/user"
 	"github.com/kongken/ohome/internal/httpx"
 )
+
+var usernameRe = regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
 
 // Handler bundles the auth-related HTTP handlers. It depends on the ent
 // client for user persistence and an Issuer for JWT signing/verification.
@@ -42,7 +45,7 @@ func (h *Handler) Register(g *gin.RouterGroup) {
 type registerRequest struct {
 	FullName     string `json:"full_name" binding:"required,max=128"`
 	Email        string `json:"email" binding:"required,email,max=254"`
-	Username     string `json:"username" binding:"required,min=3,max=64,alphanum|contains=_|contains=-"`
+	Username     string `json:"username" binding:"required,min=3,max=64"`
 	Password     string `json:"password" binding:"required,min=8,max=72"`
 	AcceptTerms  bool   `json:"accept_terms"`
 }
@@ -102,6 +105,11 @@ func (h *Handler) register(c *gin.Context) {
 
 	req.Email = strings.ToLower(strings.TrimSpace(req.Email))
 	req.Username = strings.TrimSpace(req.Username)
+
+	if !usernameRe.MatchString(req.Username) {
+		httpx.Abort(c, httpx.BadBody("username must contain only alphanumeric characters, underscores, or hyphens"))
+		return
+	}
 
 	hash, err := HashPassword(req.Password)
 	if err != nil {
@@ -210,16 +218,29 @@ func (h *Handler) refresh(c *gin.Context) {
 		return
 	}
 
-	access, expiresIn, err := h.issuer.IssueAccess(claims.Subject, claims.Username)
+	access, refresh, expiresIn, err := h.issuer.IssuePair(claims.Subject, claims.Username)
 	if err != nil {
 		httpx.Abort(c, httpx.Internal("issue token: "+err.Error()))
 		return
 	}
 
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+	defer cancel()
+
+	u, err := dao.Client().User.Query().
+		Where(entuser.IDEQ(claims.Subject)).
+		Only(ctx)
+	if err != nil {
+		httpx.Abort(c, httpx.Internal("query user: "+err.Error()))
+		return
+	}
+
 	c.JSON(http.StatusOK, tokenPair{
-		AccessToken: access,
-		TokenType:   "Bearer",
-		ExpiresIn:   expiresIn,
+		AccessToken:  access,
+		RefreshToken: refresh,
+		TokenType:    "Bearer",
+		ExpiresIn:    expiresIn,
+		User:         toPublic(u),
 	})
 }
 

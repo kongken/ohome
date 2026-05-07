@@ -39,11 +39,27 @@ type Issuer struct {
 	refreshTTL time.Duration
 }
 
+var insecureSecrets = map[string]struct{}{
+	"change-me-in-production": {},
+	"changeme":                {},
+	"secret":                  {},
+	"password":                {},
+	"test":                    {},
+}
+
+const minSecretLen = 32
+
 // NewIssuer returns a configured JWT issuer. Falls back to sensible TTLs
 // when the config strings are empty/invalid.
 func NewIssuer(cfg config.AuthConfig) (*Issuer, error) {
 	if cfg.JWTSecret == "" {
 		return nil, errors.New("auth: jwt_secret is required")
+	}
+	if _, banned := insecureSecrets[cfg.JWTSecret]; banned {
+		return nil, fmt.Errorf("auth: jwt_secret is a well-known default (%q) — set a strong random secret", cfg.JWTSecret)
+	}
+	if len(cfg.JWTSecret) < minSecretLen {
+		return nil, fmt.Errorf("auth: jwt_secret must be at least %d characters, got %d", minSecretLen, len(cfg.JWTSecret))
 	}
 	access := parseDurationOr(cfg.AccessTokenTTL, defaultAccessTTL)
 	refresh := parseDurationOr(cfg.RefreshTokenTTL, defaultRefreshTTL)
