@@ -1,0 +1,34 @@
+syntax = "proto3";
+
+package common.v1;
+
+option go_package = "github.com/kongken/ohome/pkg/proto/common/v1;commonv1";
+
+// PageRequest is the standard cursor-based pagination input.
+message PageRequest {
+  string cursor = 1;
+  int32 limit = 2;
+}
+
+// PageResponse is the standard cursor-based pagination output.
+message PageResponse {
+  string next_cursor = 1;
+  bool has_more = 2;
+}
+
+// Error is the standard error envelope. HTTP responses always carry this shape.
+message Error {
+  string code = 1;
+  string message = 2;
+  map<string, string> details = 3;
+}
+
+// MediaRef is a lightweight reference to an uploaded media object.
+message MediaRef {
+  string media_id = 1;
+  string url = 2;
+  string type = 3; // image | video | file
+  int32 width = 4;
+  int32 height = 5;
+  int64 size_bytes = 6;
+}

@@ -1,0 +1,69 @@
+syntax = "proto3";
+
+package communities.v1;
+
+import "common/v1/types.proto";
+import "users/v1/users.proto";
+
+option go_package = "github.com/kongken/ohome/pkg/proto/communities/v1;communitiesv1";
+
+// CommunityService backs the Communities sidebar entry and the Discovery
+// "Popular Communities" grid.
+//
+// HTTP mapping (see api.md §6):
+//   GET    /api/v1/communities
+//   GET    /api/v1/communities/{id}
+//   GET    /api/v1/communities/{id}/posts
+//   POST   /api/v1/communities/{id}/join
+//   DELETE /api/v1/communities/{id}/join
+//   GET    /api/v1/communities/{id}/members
+//   GET    /api/v1/users/me/communities
+service CommunityService {
+  rpc ListCommunities(ListCommunitiesRequest) returns (ListCommunitiesResponse);
+  rpc GetCommunity(GetCommunityRequest) returns (Community);
+  rpc Join(JoinRequest) returns (JoinResponse);
+  rpc Leave(LeaveRequest) returns (LeaveResponse);
+  rpc ListMembers(ListMembersRequest) returns (ListMembersResponse);
+  rpc ListMyCommunities(ListMyCommunitiesRequest) returns (ListCommunitiesResponse);
+}
+
+message Community {
+  string id = 1;
+  string name = 2;
+  string description = 3;
+  string icon_url = 4;
+  string cover_url = 5;
+  int64 members_count = 6;
+  string category = 7;
+  bool is_member = 8;
+}
+
+message ListCommunitiesRequest {
+  string q = 1;
+  string category = 2;
+  string sort = 3; // members | trending
+  common.v1.PageRequest page = 4;
+}
+message ListCommunitiesResponse {
+  repeated Community items = 1;
+  common.v1.PageResponse page = 2;
+}
+
+message GetCommunityRequest { string id = 1; }
+message JoinRequest { string id = 1; }
+message JoinResponse { Community community = 1; }
+message LeaveRequest { string id = 1; }
+message LeaveResponse {}
+
+message ListMembersRequest {
+  string id = 1;
+  common.v1.PageRequest page = 2;
+}
+message ListMembersResponse {
+  repeated users.v1.User items = 1;
+  common.v1.PageResponse page = 2;
+}
+
+message ListMyCommunitiesRequest {
+  common.v1.PageRequest page = 1;
+}

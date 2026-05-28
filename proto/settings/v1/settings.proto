@@ -1,0 +1,134 @@
+syntax = "proto3";
+
+package settings.v1;
+
+option go_package = "github.com/kongken/ohome/pkg/proto/settings/v1;settingsv1";
+
+// SettingsService manages account / privacy / notification preferences shown
+// on the Settings screen.
+//
+// HTTP mapping (see api.md §11):
+//   GET    /api/v1/settings/account
+//   PATCH  /api/v1/settings/account/email
+//   POST   /api/v1/settings/account/2fa/enable
+//   POST   /api/v1/settings/account/2fa/disable
+//   GET    /api/v1/settings/account/sessions
+//   DELETE /api/v1/settings/account/sessions/{id}
+//   GET    /api/v1/settings/privacy
+//   PATCH  /api/v1/settings/privacy
+//   GET    /api/v1/settings/privacy/blocked
+//   POST   /api/v1/users/{username}/block
+//   DELETE /api/v1/users/{username}/block
+//   GET    /api/v1/settings/notifications
+//   PATCH  /api/v1/settings/notifications
+//   POST   /api/v1/settings/notifications/devices
+//   DELETE /api/v1/settings/notifications/devices/{id}
+service SettingsService {
+  rpc GetAccount(GetAccountRequest) returns (Account);
+  rpc UpdateEmail(UpdateEmailRequest) returns (UpdateEmailResponse);
+  rpc EnableTwoFactor(EnableTwoFactorRequest) returns (EnableTwoFactorResponse);
+  rpc DisableTwoFactor(DisableTwoFactorRequest) returns (DisableTwoFactorResponse);
+  rpc ListSessions(ListSessionsRequest) returns (ListSessionsResponse);
+  rpc RevokeSession(RevokeSessionRequest) returns (RevokeSessionResponse);
+
+  rpc GetPrivacy(GetPrivacyRequest) returns (Privacy);
+  rpc UpdatePrivacy(UpdatePrivacyRequest) returns (Privacy);
+  rpc ListBlocked(ListBlockedRequest) returns (ListBlockedResponse);
+  rpc BlockUser(BlockUserRequest) returns (BlockUserResponse);
+  rpc UnblockUser(UnblockUserRequest) returns (UnblockUserResponse);
+
+  rpc GetNotifications(GetNotificationsRequest) returns (NotificationPreferences);
+  rpc UpdateNotifications(UpdateNotificationsRequest) returns (NotificationPreferences);
+  rpc RegisterDevice(RegisterDeviceRequest) returns (Device);
+  rpc UnregisterDevice(UnregisterDeviceRequest) returns (UnregisterDeviceResponse);
+}
+
+message Account {
+  string email = 1;
+  bool email_verified = 2;
+  string username = 3;
+  bool two_factor_enabled = 4;
+  repeated string login_methods = 5;
+}
+message GetAccountRequest {}
+
+message UpdateEmailRequest { string email = 1; }
+message UpdateEmailResponse { Account account = 1; }
+
+message EnableTwoFactorRequest { string method = 1; } // totp | sms
+message EnableTwoFactorResponse {
+  string provisioning_uri = 1;
+  repeated string recovery_codes = 2;
+}
+message DisableTwoFactorRequest { string code = 1; }
+message DisableTwoFactorResponse {}
+
+message Session {
+  string id = 1;
+  string ip = 2;
+  string user_agent = 3;
+  string created_at = 4;
+  string last_seen_at = 5;
+  bool current = 6;
+}
+message ListSessionsRequest {}
+message ListSessionsResponse { repeated Session items = 1; }
+message RevokeSessionRequest { string id = 1; }
+message RevokeSessionResponse {}
+
+message Privacy {
+  string profile_visibility = 1;     // public | followers | private
+  string allow_messages_from = 2;    // everyone | followers | none
+  bool show_online_status = 3;
+  bool data_sharing = 4;
+}
+message GetPrivacyRequest {}
+message UpdatePrivacyRequest {
+  optional string profile_visibility = 1;
+  optional string allow_messages_from = 2;
+  optional bool show_online_status = 3;
+  optional bool data_sharing = 4;
+}
+
+message BlockedUser {
+  string user_id = 1;
+  string username = 2;
+  string blocked_at = 3;
+}
+message ListBlockedRequest {}
+message ListBlockedResponse { repeated BlockedUser items = 1; }
+message BlockUserRequest { string username = 1; }
+message BlockUserResponse {}
+message UnblockUserRequest { string username = 1; }
+message UnblockUserResponse {}
+
+message ChannelPreferences {
+  bool likes = 1;
+  bool comments = 2;
+  bool follows = 3;
+  bool messages = 4;
+  bool mentions = 5;
+}
+
+message NotificationPreferences {
+  ChannelPreferences email = 1;
+  ChannelPreferences push = 2;
+  ChannelPreferences in_app = 3;
+}
+message GetNotificationsRequest {}
+message UpdateNotificationsRequest {
+  NotificationPreferences preferences = 1;
+}
+
+message Device {
+  string id = 1;
+  string platform = 2; // ios | android | web
+  string token = 3;
+  string created_at = 4;
+}
+message RegisterDeviceRequest {
+  string platform = 1;
+  string token = 2;
+}
+message UnregisterDeviceRequest { string id = 1; }
+message UnregisterDeviceResponse {}

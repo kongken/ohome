@@ -1,0 +1,65 @@
+syntax = "proto3";
+
+package dashboard.v1;
+
+import "connections/v1/connections.proto";
+import "posts/v1/posts.proto";
+import "users/v1/users.proto";
+
+option go_package = "github.com/kongken/ohome/pkg/proto/dashboard/v1;dashboardv1";
+
+// DashboardService backs the personalized Dashboard screen.
+//
+// HTTP mapping (see api.md §10):
+//   GET /api/v1/dashboard/summary
+//   GET /api/v1/dashboard/metrics
+//   GET /api/v1/dashboard/activity
+//   GET /api/v1/dashboard/quick-links
+service DashboardService {
+  rpc Summary(SummaryRequest) returns (SummaryResponse);
+  rpc Metrics(MetricsRequest) returns (MetricsResponse);
+  rpc Activity(ActivityRequest) returns (ActivityResponse);
+  rpc QuickLinks(QuickLinksRequest) returns (QuickLinksResponse);
+}
+
+message SummaryRequest {}
+message SummaryResponse {
+  users.v1.User user = 1;
+  string greeting = 2;
+  string subtitle = 3;
+}
+
+message MetricsRequest {}
+
+message Metric {
+  string key = 1;          // profile_views | post_impressions | new_followers
+  int64 value = 2;
+  double change_pct = 3;   // for trend cards
+  int64 change_abs = 4;    // for delta cards
+  string period = 5;       // today | week | since_last_login
+  string label = 6;
+}
+
+message MetricsResponse {
+  repeated Metric items = 1;
+  string analytics_url = 2;
+}
+
+message ActivityRequest {
+  int32 limit = 1;
+}
+message ActivityResponse {
+  repeated posts.v1.Post posts = 1;
+  repeated connections.v1.ConnectionRequest connection_requests = 2;
+}
+
+message QuickLink {
+  string key = 1;   // events | market | articles | jobs
+  string label = 2;
+  string icon = 3;
+  string url = 4;
+}
+message QuickLinksRequest {}
+message QuickLinksResponse {
+  repeated QuickLink items = 1;
+}

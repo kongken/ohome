@@ -1,0 +1,81 @@
+syntax = "proto3";
+
+package messages.v1;
+
+import "common/v1/types.proto";
+import "users/v1/users.proto";
+
+option go_package = "github.com/kongken/ohome/pkg/proto/messages/v1;messagesv1";
+
+// MessageService powers the chat icon and "Message Friend" action.
+//
+// HTTP mapping (see api.md §9):
+//   GET    /api/v1/messages/conversations
+//   POST   /api/v1/messages/conversations
+//   GET    /api/v1/messages/conversations/{id}
+//   GET    /api/v1/messages/conversations/{id}/messages
+//   POST   /api/v1/messages/conversations/{id}/messages
+//   POST   /api/v1/messages/conversations/{id}/read
+//   DELETE /api/v1/messages/{id}
+service MessageService {
+  rpc ListConversations(ListConversationsRequest) returns (ListConversationsResponse);
+  rpc CreateConversation(CreateConversationRequest) returns (Conversation);
+  rpc GetConversation(GetConversationRequest) returns (Conversation);
+  rpc ListMessages(ListMessagesRequest) returns (ListMessagesResponse);
+  rpc SendMessage(SendMessageRequest) returns (Message);
+  rpc MarkRead(MarkReadRequest) returns (MarkReadResponse);
+  rpc DeleteMessage(DeleteMessageRequest) returns (DeleteMessageResponse);
+}
+
+message Conversation {
+  string id = 1;
+  repeated users.v1.User participants = 2;
+  Message last_message = 3;
+  int64 unread_count = 4;
+  string created_at = 5;
+}
+
+message Message {
+  string id = 1;
+  string conversation_id = 2;
+  users.v1.User sender = 3;
+  string content = 4;
+  repeated common.v1.MediaRef attachments = 5;
+  string created_at = 6;
+  repeated string read_by = 7;
+}
+
+message ListConversationsRequest {
+  common.v1.PageRequest page = 1;
+}
+message ListConversationsResponse {
+  repeated Conversation items = 1;
+  common.v1.PageResponse page = 2;
+}
+
+message CreateConversationRequest {
+  repeated string participant_ids = 1;
+}
+
+message GetConversationRequest { string id = 1; }
+
+message ListMessagesRequest {
+  string conversation_id = 1;
+  common.v1.PageRequest page = 2;
+}
+message ListMessagesResponse {
+  repeated Message items = 1;
+  common.v1.PageResponse page = 2;
+}
+
+message SendMessageRequest {
+  string conversation_id = 1;
+  string content = 2;
+  repeated string attachment_ids = 3;
+}
+
+message MarkReadRequest { string conversation_id = 1; }
+message MarkReadResponse {}
+
+message DeleteMessageRequest { string id = 1; }
+message DeleteMessageResponse {}

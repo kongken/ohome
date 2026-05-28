@@ -1,0 +1,41 @@
+environment: "local"
+http_port: 8080
+
+log:
+  level: "info"
+  format: "text"
+  add_source: false
+
+otel: {}
+
+auth:
+  jwt_secret: "${JWT_SECRET}"  # REQUIRED: set via env or override file; must be ≥ 32 chars
+  access_token_ttl: "1h"
+  refresh_token_ttl: "720h"
+
+store:
+  db:
+    default:
+      driver: "postgres"
+      host: "127.0.0.1"
+      port: 5432
+      user: "ohome"
+      password: "ohome"
+      db_name: "ohome"
+      ssl_mode: "disable"
+  redis:
+    default:
+      addr: "127.0.0.1:6379"
+      password: ""
+      db: 0
+  mongo:
+    default:
+      uri: "mongodb://127.0.0.1:27017/ohome"
+  s3:
+    media:
+      endpoint: ""
+      access_key_id: ""
+      secret_access_key: ""
+      region: "us-east-1"
+      bucket: "ohome-media"
+      use_ssl: true
