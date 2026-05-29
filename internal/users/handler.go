@@ -40,7 +40,7 @@ func (h *Handler) Register(g *gin.RouterGroup) {
 	me.GET("/interests", h.getInterests)
 	me.PUT("/interests", h.updateInterests)
 
-	g.GET("/:username", h.getUser)
+	g.GET("/:username", auth.OptionalAuth(h.issuer), h.getUser)
 }
 
 type updateMeRequest struct {

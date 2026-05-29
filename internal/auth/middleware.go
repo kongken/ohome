@@ -25,25 +25,28 @@ func RequireAuth(issuer *Issuer) gin.HandlerFunc {
 			httpx.Abort(c, httpx.New(401, httpx.CodeUnauthorized, "missing bearer token"))
 			return
 		}
-		claims, err := issuer.Parse(raw, AccessToken)
-		if err != nil {
-			code := httpx.CodeAuthTokenInvalid
-			msg := "invalid token"
-			if errors.Is(err, jwt.ErrTokenExpired) {
-				code = httpx.CodeAuthTokenExpired
-				msg = "token expired"
-			}
-			httpx.Abort(c, httpx.New(401, code, msg))
+		if !authenticate(c, issuer, raw) {
 			return
 		}
-		c.Set(ctxUserID, claims.Subject)
-		c.Set(ctxUsername, claims.Username)
 		c.Next()
 	}
 }
 
-// UserID returns the authenticated user id from context, or "" when
-// RequireAuth did not run.
+// OptionalAuth verifies a Bearer access token when present and stores
+// `user_id` / `username` in the gin context. Requests without a bearer token
+// continue as anonymous; invalid or expired tokens still abort with 401.
+func OptionalAuth(issuer *Issuer) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		raw := bearer(c.GetHeader("Authorization"))
+		if raw != "" && !authenticate(c, issuer, raw) {
+			return
+		}
+		c.Next()
+	}
+}
+
+// UserID returns the authenticated user id from context, or "" when auth
+// middleware did not run or the request is anonymous.
 func UserID(c *gin.Context) string {
 	v, _ := c.Get(ctxUserID)
 	s, _ := v.(string)
@@ -66,4 +69,21 @@ func bearer(h string) string {
 		return ""
 	}
 	return strings.TrimSpace(h[len(prefix):])
+}
+
+func authenticate(c *gin.Context, issuer *Issuer, raw string) bool {
+	claims, err := issuer.Parse(raw, AccessToken)
+	if err != nil {
+		code := httpx.CodeAuthTokenInvalid
+		msg := "invalid token"
+		if errors.Is(err, jwt.ErrTokenExpired) {
+			code = httpx.CodeAuthTokenExpired
+			msg = "token expired"
+		}
+		httpx.Abort(c, httpx.New(401, code, msg))
+		return false
+	}
+	c.Set(ctxUserID, claims.Subject)
+	c.Set(ctxUsername, claims.Username)
+	return true
 }
