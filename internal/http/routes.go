@@ -8,6 +8,7 @@ import (
 
 	"github.com/kongken/ohome/internal/auth"
 	"github.com/kongken/ohome/internal/config"
+	"github.com/kongken/ohome/internal/connections"
 	"github.com/kongken/ohome/internal/users"
 )
 
@@ -34,7 +35,10 @@ func RegisterRoutes(r *gin.Engine, cfg *config.ServiceConfig) error {
 		return fmt.Errorf("auth issuer init: %w", err)
 	}
 	auth.NewHandler(issuer).Register(v1.Group("/auth"))
-	users.NewHandler(issuer).Register(v1.Group("/users"))
+
+	usersGroup := v1.Group("/users")
+	users.NewHandler(issuer).Register(usersGroup)
+	connections.NewHandler(issuer).RegisterOnUsers(usersGroup)
 
 	// Future domain handlers (posts, media, ...) registered here.
 	return nil
