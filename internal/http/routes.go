@@ -8,6 +8,7 @@ import (
 
 	"github.com/kongken/ohome/internal/auth"
 	"github.com/kongken/ohome/internal/config"
+	"github.com/kongken/ohome/internal/users"
 )
 
 // RegisterRoutes wires HTTP handlers onto the gin engine. Domain handlers
@@ -33,8 +34,9 @@ func RegisterRoutes(r *gin.Engine, cfg *config.ServiceConfig) error {
 		return fmt.Errorf("auth issuer init: %w", err)
 	}
 	auth.NewHandler(issuer).Register(v1.Group("/auth"))
+	users.NewHandler(issuer).Register(v1.Group("/users"))
 
-	// Future domain handlers (users, posts, ...) registered here.
+	// Future domain handlers (posts, media, ...) registered here.
 	return nil
 }
 
