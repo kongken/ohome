@@ -2,6 +2,7 @@ package connections
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -123,16 +124,27 @@ func (h *Handler) listFollowers(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
 	defer cancel()
 
-	users, err := target.QueryFollowers().
-		Order(entuser.ByCreatedAt(sql.OrderDesc())).
-		Limit(page.Limit + 1).
-		All(ctx)
+	query := target.QueryFollowers().
+		Order(entuser.ByCreatedAt(sql.OrderDesc()), entuser.ByID(sql.OrderDesc())).
+		Limit(page.Limit + 1)
+
+	query, err := applyCursor(ctx, query, page.Cursor)
+	if err != nil {
+		httpx.Abort(c, httpx.BadQuery("invalid cursor"))
+		return
+	}
+
+	users, err := query.All(ctx)
 	if err != nil {
 		httpx.Abort(c, httpx.Internal("list followers: "+err.Error()))
 		return
 	}
 
-	summaries, nextCursor := h.toSummaries(ctx, users, viewerID, page.Limit)
+	summaries, nextCursor, err := h.toSummaries(ctx, users, viewerID, page.Limit)
+	if err != nil {
+		httpx.Abort(c, httpx.Internal("list followers: "+err.Error()))
+		return
+	}
 	c.JSON(http.StatusOK, gin.H{
 		"followers": summaries,
 		"page":      httpx.PageResponse{NextCursor: nextCursor, HasMore: nextCursor != ""},
@@ -150,16 +162,27 @@ func (h *Handler) listFollowing(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
 	defer cancel()
 
-	users, err := target.QueryFollowing().
-		Order(entuser.ByCreatedAt(sql.OrderDesc())).
-		Limit(page.Limit + 1).
-		All(ctx)
+	query := target.QueryFollowing().
+		Order(entuser.ByCreatedAt(sql.OrderDesc()), entuser.ByID(sql.OrderDesc())).
+		Limit(page.Limit + 1)
+
+	query, err := applyCursor(ctx, query, page.Cursor)
+	if err != nil {
+		httpx.Abort(c, httpx.BadQuery("invalid cursor"))
+		return
+	}
+
+	users, err := query.All(ctx)
 	if err != nil {
 		httpx.Abort(c, httpx.Internal("list following: "+err.Error()))
 		return
 	}
 
-	summaries, nextCursor := h.toSummaries(ctx, users, viewerID, page.Limit)
+	summaries, nextCursor, err := h.toSummaries(ctx, users, viewerID, page.Limit)
+	if err != nil {
+		httpx.Abort(c, httpx.Internal("list following: "+err.Error()))
+		return
+	}
 	c.JSON(http.StatusOK, gin.H{
 		"following": summaries,
 		"page":      httpx.PageResponse{NextCursor: nextCursor, HasMore: nextCursor != ""},
@@ -186,10 +209,31 @@ func (h *Handler) resolveTarget(c *gin.Context) (*ent.User, bool) {
 	return u, true
 }
 
+// applyCursor adds keyset pagination filters when a cursor (user ID) is
+// provided. Ordering must be (created_at DESC, id DESC) for this to work.
+func applyCursor(ctx context.Context, query *ent.UserQuery, cursor string) (*ent.UserQuery, error) {
+	if cursor == "" {
+		return query, nil
+	}
+	u, err := dao.Client().User.Get(ctx, cursor)
+	if err != nil {
+		return nil, fmt.Errorf("cursor user not found: %w", err)
+	}
+	return query.Where(
+		entuser.Or(
+			entuser.CreatedAtLT(u.CreatedAt),
+			entuser.And(
+				entuser.CreatedAtEQ(u.CreatedAt),
+				entuser.IDLT(cursor),
+			),
+		),
+	), nil
+}
+
 // toSummaries converts ent users to UserSummary slices, applying the page
 // limit and computing a cursor for the next page (user ID of last item).
 // It batch-checks follow status for the viewer in a single query.
-func (h *Handler) toSummaries(ctx context.Context, users []*ent.User, viewerID string, limit int) ([]UserSummary, string) {
+func (h *Handler) toSummaries(ctx context.Context, users []*ent.User, viewerID string, limit int) ([]UserSummary, string, error) {
 	hasMore := len(users) > limit
 	if hasMore {
 		users = users[:limit]
@@ -201,11 +245,14 @@ func (h *Handler) toSummaries(ctx context.Context, users []*ent.User, viewerID s
 		for i, u := range users {
 			ids[i] = u.ID
 		}
-		fids, _ := dao.Client().User.Query().
+		fids, err := dao.Client().User.Query().
 			Where(entuser.IDEQ(viewerID)).
 			QueryFollowing().
 			Where(entuser.IDIn(ids...)).
 			IDs(ctx)
+		if err != nil {
+			return nil, "", fmt.Errorf("batch is_following check: %w", err)
+		}
 		for _, id := range fids {
 			following[id] = true
 		}
@@ -226,7 +273,7 @@ func (h *Handler) toSummaries(ctx context.Context, users []*ent.User, viewerID s
 	if hasMore && len(users) > 0 {
 		nextCursor = users[len(users)-1].ID
 	}
-	return out, nextCursor
+	return out, nextCursor, nil
 }
 
 // IsFollowing checks whether followerID follows targetID. Used by other
