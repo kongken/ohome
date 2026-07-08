@@ -5,6 +5,7 @@ package ent
 import (
 	"time"
 
+	"github.com/kongken/ohome/internal/dao/ent/post"
 	"github.com/kongken/ohome/internal/dao/ent/schema"
 	"github.com/kongken/ohome/internal/dao/ent/user"
 )
@@ -13,6 +14,58 @@ import (
 // (default values, validators, hooks and policies) and stitches it
 // to their package variables.
 func init() {
+	postFields := schema.Post{}.Fields()
+	_ = postFields
+	// postDescAuthorID is the schema descriptor for author_id field.
+	postDescAuthorID := postFields[1].Descriptor()
+	// post.AuthorIDValidator is a validator for the "author_id" field. It is called by the builders before save.
+	post.AuthorIDValidator = postDescAuthorID.Validators[0].(func(string) error)
+	// postDescCommunityID is the schema descriptor for community_id field.
+	postDescCommunityID := postFields[5].Descriptor()
+	// post.CommunityIDValidator is a validator for the "community_id" field. It is called by the builders before save.
+	post.CommunityIDValidator = postDescCommunityID.Validators[0].(func(string) error)
+	// postDescEventID is the schema descriptor for event_id field.
+	postDescEventID := postFields[6].Descriptor()
+	// post.EventIDValidator is a validator for the "event_id" field. It is called by the builders before save.
+	post.EventIDValidator = postDescEventID.Validators[0].(func(string) error)
+	// postDescVisibility is the schema descriptor for visibility field.
+	postDescVisibility := postFields[7].Descriptor()
+	// post.DefaultVisibility holds the default value on creation for the visibility field.
+	post.DefaultVisibility = postDescVisibility.Default.(string)
+	// post.VisibilityValidator is a validator for the "visibility" field. It is called by the builders before save.
+	post.VisibilityValidator = postDescVisibility.Validators[0].(func(string) error)
+	// postDescLikesCount is the schema descriptor for likes_count field.
+	postDescLikesCount := postFields[8].Descriptor()
+	// post.DefaultLikesCount holds the default value on creation for the likes_count field.
+	post.DefaultLikesCount = postDescLikesCount.Default.(int)
+	// post.LikesCountValidator is a validator for the "likes_count" field. It is called by the builders before save.
+	post.LikesCountValidator = postDescLikesCount.Validators[0].(func(int) error)
+	// postDescCommentsCount is the schema descriptor for comments_count field.
+	postDescCommentsCount := postFields[9].Descriptor()
+	// post.DefaultCommentsCount holds the default value on creation for the comments_count field.
+	post.DefaultCommentsCount = postDescCommentsCount.Default.(int)
+	// post.CommentsCountValidator is a validator for the "comments_count" field. It is called by the builders before save.
+	post.CommentsCountValidator = postDescCommentsCount.Validators[0].(func(int) error)
+	// postDescSharesCount is the schema descriptor for shares_count field.
+	postDescSharesCount := postFields[10].Descriptor()
+	// post.DefaultSharesCount holds the default value on creation for the shares_count field.
+	post.DefaultSharesCount = postDescSharesCount.Default.(int)
+	// post.SharesCountValidator is a validator for the "shares_count" field. It is called by the builders before save.
+	post.SharesCountValidator = postDescSharesCount.Validators[0].(func(int) error)
+	// postDescCreatedAt is the schema descriptor for created_at field.
+	postDescCreatedAt := postFields[11].Descriptor()
+	// post.DefaultCreatedAt holds the default value on creation for the created_at field.
+	post.DefaultCreatedAt = postDescCreatedAt.Default.(func() time.Time)
+	// postDescUpdatedAt is the schema descriptor for updated_at field.
+	postDescUpdatedAt := postFields[12].Descriptor()
+	// post.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	post.DefaultUpdatedAt = postDescUpdatedAt.Default.(func() time.Time)
+	// post.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	post.UpdateDefaultUpdatedAt = postDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// postDescID is the schema descriptor for id field.
+	postDescID := postFields[0].Descriptor()
+	// post.IDValidator is a validator for the "id" field. It is called by the builders before save.
+	post.IDValidator = postDescID.Validators[0].(func(string) error)
 	userFields := schema.User{}.Fields()
 	_ = userFields
 	// userDescUsername is the schema descriptor for username field.
