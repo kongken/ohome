@@ -146,8 +146,9 @@ func (h *Handler) listFollowers(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{
-		"followers": summaries,
-		"page":      httpx.PageResponse{NextCursor: nextCursor, HasMore: nextCursor != ""},
+		"items":       summaries,
+		"next_cursor": nextCursor,
+		"has_more":    nextCursor != "",
 	})
 }
 
@@ -184,8 +185,9 @@ func (h *Handler) listFollowing(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{
-		"following": summaries,
-		"page":      httpx.PageResponse{NextCursor: nextCursor, HasMore: nextCursor != ""},
+		"items":       summaries,
+		"next_cursor": nextCursor,
+		"has_more":    nextCursor != "",
 	})
 }
 

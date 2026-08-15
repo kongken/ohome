@@ -211,7 +211,7 @@ func (h *Handler) feed(c *gin.Context) {
 		httpx.Abort(c, httpx.BadQuery("invalid cursor"))
 		return
 	}
-	h.writePostList(c, ctx, posts, viewerID, page.Limit, "posts")
+	h.writePostList(c, ctx, posts, viewerID, page.Limit)
 }
 
 func (h *Handler) userPosts(c *gin.Context) {
@@ -260,7 +260,7 @@ func (h *Handler) userPosts(c *gin.Context) {
 		httpx.Abort(c, httpx.BadQuery("invalid cursor"))
 		return
 	}
-	h.writePostList(c, ctx, posts, viewerID, page.Limit, "posts")
+	h.writePostList(c, ctx, posts, viewerID, page.Limit)
 }
 
 func (h *Handler) getPost(c *gin.Context) {
@@ -306,10 +306,6 @@ func (h *Handler) updatePost(c *gin.Context) {
 		httpx.Abort(c, httpx.BadBody(err.Error()))
 		return
 	}
-	if err := normalizeUpdate(&req); err != nil {
-		httpx.Abort(c, err)
-		return
-	}
 
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
 	defer cancel()
@@ -323,6 +319,15 @@ func (h *Handler) updatePost(c *gin.Context) {
 	}
 	if p.AuthorID != viewerID {
 		httpx.Abort(c, httpx.Forbidden("only the author can edit this post"))
+		return
+	}
+
+	hasMedia := len(p.Attachments) > 0
+	if req.Attachments != nil {
+		hasMedia = len(*req.Attachments) > 0
+	}
+	if err := normalizeUpdate(&req, hasMedia); err != nil {
+		httpx.Abort(c, err)
 		return
 	}
 
@@ -386,7 +391,7 @@ func (h *Handler) deletePost(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
 
-func (h *Handler) writePostList(c *gin.Context, ctx context.Context, posts []*ent.Post, viewerID string, limit int, key string) {
+func (h *Handler) writePostList(c *gin.Context, ctx context.Context, posts []*ent.Post, viewerID string, limit int) {
 	hasMore := len(posts) > limit
 	if hasMore {
 		posts = posts[:limit]
@@ -403,8 +408,9 @@ func (h *Handler) writePostList(c *gin.Context, ctx context.Context, posts []*en
 		nextCursor = posts[len(posts)-1].ID
 	}
 	c.JSON(http.StatusOK, gin.H{
-		key:    resp,
-		"page": httpx.PageResponse{NextCursor: nextCursor, HasMore: nextCursor != ""},
+		"items":       resp,
+		"next_cursor": nextCursor,
+		"has_more":    hasMore,
 	})
 }
 
@@ -491,7 +497,7 @@ func normalizeCreate(req *createPostRequest) error {
 	if req.Visibility == "" {
 		req.Visibility = visibilityPublic
 	}
-	if err := validateContent(req.Content); err != nil {
+	if err := validateContent(req.Content, len(req.Attachments) > 0); err != nil {
 		return err
 	}
 	if err := validateVisibility(req.Visibility); err != nil {
@@ -505,10 +511,10 @@ func normalizeCreate(req *createPostRequest) error {
 	return validateAttachments(req.Attachments)
 }
 
-func normalizeUpdate(req *updatePostRequest) error {
+func normalizeUpdate(req *updatePostRequest, hasMedia bool) error {
 	if req.Content != nil {
 		content := strings.TrimSpace(*req.Content)
-		if err := validateContent(content); err != nil {
+		if err := validateContent(content, hasMedia); err != nil {
 			return err
 		}
 		req.Content = &content
@@ -537,8 +543,8 @@ func normalizeUpdate(req *updatePostRequest) error {
 	return nil
 }
 
-func validateContent(content string) error {
-	if content == "" {
+func validateContent(content string, hasMedia bool) error {
+	if content == "" && !hasMedia {
 		return httpx.BadBody("content is required")
 	}
 	if len(content) > maxContentLen {
@@ -702,6 +708,10 @@ func normalizeOptionalString(s *string) *string {
 }
 
 func applyOptional(set func(string) *ent.PostUpdateOne, clear func() *ent.PostUpdateOne, value *string) {
+	applyOptionalValue(func(s string) { set(s) }, func() { clear() }, value)
+}
+
+func applyOptionalValue(set func(string), clear func(), value *string) {
 	if value == nil {
 		return
 	}

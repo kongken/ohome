@@ -17,12 +17,6 @@ type Page struct {
 	Limit  int
 }
 
-// PageResponse mirrors `common.v1.PageResponse`.
-type PageResponse struct {
-	NextCursor string `json:"next_cursor,omitempty"`
-	HasMore    bool   `json:"has_more"`
-}
-
 // ParsePage reads `cursor` and `limit` query params, applying defaults and
 // the global cap. Never returns an error: invalid `limit` falls back to the
 // default rather than failing the request.
