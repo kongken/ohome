@@ -15,7 +15,7 @@
 | 1. Auth | ✅ | 🚧 | 🚧 | 🚧 | ⬜ |
 | 2. Users / Profile | ✅ | ⬜ | ⬜ | ⬜ | ⬜ |
 | 3. Connections | ✅ | ⬜ | ⬜ | ⬜ | ⬜ |
-| 4. Posts & Feed | ✅ | ⬜ | ⬜ | ⬜ | ⬜ |
+| 4. Posts & Feed | ✅ | 🚧 | 🚧 | 🚧 | 🚧 |
 | 4.1 互动 (Like/Bookmark/Share) | ✅ | ⬜ | ⬜ | ⬜ | ⬜ |
 | 4.2 Comments | ✅ | ⬜ | ⬜ | ⬜ | ⬜ |
 | 5. Media | ✅ | ⬜ | ⬜ | ⬜ | ⬜ |
@@ -81,7 +81,7 @@
 | 实体 | Schema | 状态 |
 |---|---|:-:|
 | User | `internal/dao/ent/schema/user.go` | ✅ 基础字段 + followers/following 自关联 |
-| Post |  | ⬜ |
+| Post | `internal/dao/ent/schema/post.go` | ✅ 基础字段 + attachments/hashtags JSON + 软删除 + visibility + 计数 |
 | Comment |  | ⬜ |
 | Community |  | ⬜ |
 | Membership (User↔Community) |  | ⬜ |
@@ -178,14 +178,16 @@ DAO helper 入口：`internal/dao/media.go` (`MediaClient()` / `MediaBucketName(
 ## 4. 动态 / 帖子 (Posts)
 
 | Method | Path | 状态 |
-|---|---|:-:|
-| GET    | `/feed` | ⬜ |
-| GET    | `/posts/{id}` | ⬜ |
-| POST   | `/posts` | ⬜ |
-| PATCH  | `/posts/{id}` | ⬜ |
-| DELETE | `/posts/{id}` | ⬜ |
+|---|---|---|
+| GET    | `/feed` | ✅ scope: for_you/following/community |
+| GET    | `/posts/{id}` | ✅ 含 visibility 控制 |
+| POST   | `/posts` | ✅ 支持纯媒体帖 |
+| PATCH  | `/posts/{id}` | ✅ 作者可编辑 |
+| DELETE | `/posts/{id}` | ✅ 软删除 |
 | POST   | `/posts/{id}/report` | ⬜ |
 | POST   | `/posts/{id}/hide` | ⬜ |
+
+实现：`internal/posts/handler.go`（feed/posts CRUD + 游标分页 + visibility 过滤）；社区/事件引用目前只存 ID（Community 表未建）。
 
 ### 4.1 互动
 

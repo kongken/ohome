@@ -10,6 +10,7 @@ import (
 	"github.com/kongken/ohome/internal/config"
 	"github.com/kongken/ohome/internal/connections"
 	"github.com/kongken/ohome/internal/media"
+	"github.com/kongken/ohome/internal/posts"
 	"github.com/kongken/ohome/internal/users"
 )
 
@@ -40,8 +41,11 @@ func RegisterRoutes(r *gin.Engine, cfg *config.ServiceConfig) error {
 	usersGroup := v1.Group("/users")
 	users.NewHandler(issuer).Register(usersGroup)
 	connections.NewHandler(issuer).RegisterOnUsers(usersGroup)
+	postsHandler := posts.NewHandler(issuer)
+	postsHandler.RegisterOnUsers(usersGroup)
 
 	media.NewHandler(issuer).Register(v1.Group("/media"))
+	postsHandler.Register(v1)
 
 	// Future domain handlers (posts, communities, ...) registered here.
 	return nil
