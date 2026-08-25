@@ -4,7 +4,7 @@
 
 **Legend**: ✅ 完成 · 🚧 进行中 · ⬜ 待开始
 
-**最后更新**: 2026-04-30
+**最后更新**: 2026-08-25
 
 ---
 
@@ -12,13 +12,13 @@
 
 | 模块 | Proto | Handler | Service | Storage | 测试 |
 |---|:-:|:-:|:-:|:-:|:-:|
-| 1. Auth | ✅ | 🚧 | 🚧 | 🚧 | ⬜ |
-| 2. Users / Profile | ✅ | ⬜ | ⬜ | ⬜ | ⬜ |
-| 3. Connections | ✅ | ⬜ | ⬜ | ⬜ | ⬜ |
+| 1. Auth | ✅ | 🚧 | 🚧 | 🚧 | 🚧 |
+| 2. Users / Profile | ✅ | 🚧 | 🚧 | ✅ | 🚧 |
+| 3. Connections | ✅ | 🚧 | 🚧 | 🚧 | ⬜ |
 | 4. Posts & Feed | ✅ | 🚧 | 🚧 | 🚧 | 🚧 |
 | 4.1 互动 (Like/Bookmark/Share) | ✅ | ⬜ | ⬜ | ⬜ | ⬜ |
 | 4.2 Comments | ✅ | ⬜ | ⬜ | ⬜ | ⬜ |
-| 5. Media | ✅ | ⬜ | ⬜ | ⬜ | ⬜ |
+| 5. Media | ✅ | 🚧 | 🚧 | 🚧 | ⬜ |
 | 6. Communities | ✅ | ⬜ | ⬜ | ⬜ | ⬜ |
 | 7. Discovery | ✅ | ⬜ | ⬜ | ⬜ | ⬜ |
 | 7.1 Search | ✅ | ⬜ | ⬜ | ⬜ | ⬜ |
@@ -107,11 +107,11 @@ DAO helper 入口：`internal/dao/mongo.go` (`NotificationsColl()` / `MessagesCo
 
 | 用途 | Key 约定 | 状态 |
 |---|---|:-:|
-| 头像 | `avatars/{user_id}/{media_id}.{ext}` | ⬜ |
-| 封面 | `covers/{user_id}/{media_id}.{ext}` | ⬜ |
-| 帖子图片 / 视频 | `posts/{user_id}/{yyyy-mm}/{media_id}.{ext}` | ⬜ |
-| Photo (相册照片) | `photos/{user_id}/{media_id}.{ext}` | ⬜ |
-| 私信附件 | `messages/{conversation_id}/{media_id}.{ext}` | ⬜ |
+| 头像 | `avatars/{user_id}/{media_id}.{ext}` | ✅ presign 已按此约定生成 key |
+| 封面 | `covers/{user_id}/{media_id}.{ext}` | ✅ 同上 |
+| 帖子图片 / 视频 | `posts/{user_id}/{yyyy-mm}/{media_id}.{ext}` | ✅ 同上 |
+| Photo (相册照片) | `photos/{user_id}/{media_id}.{ext}` | ✅ 同上 |
+| 私信附件 | `messages/{conversation_id}/{media_id}.{ext}` | ⬜ 待 Messages 模块 |
 
 DAO helper 入口：`internal/dao/media.go` (`MediaClient()` / `MediaBucketName()`)；上传通过 `MediaService.Presign` 返回预签名 PUT URL，前端直传。
 
@@ -140,20 +140,22 @@ DAO helper 入口：`internal/dao/media.go` (`MediaClient()` / `MediaBucketName(
 
 | Method | Path | 状态 |
 |---|---|:-:|
-| GET    | `/users/me` | ⬜ |
-| PATCH  | `/users/me` | ⬜ |
+| GET    | `/users/me` | ✅ |
+| PATCH  | `/users/me` | ✅ |
 | DELETE | `/users/me` | ⬜ |
-| POST   | `/users/me/avatar` | ⬜ |
-| POST   | `/users/me/cover` | ⬜ |
-| GET    | `/users/{username}` | ⬜ |
+| POST   | `/users/me/avatar` | ⬜ 头像上传可走 `/media/uploads/presign` (usage=avatar) |
+| POST   | `/users/me/cover` | ⬜ 同上 (usage=cover) |
+| GET    | `/users/{username}` | ✅ 公开资料，可选鉴权 |
 | GET    | `/users/{username}/stats` | ⬜ |
-| GET    | `/users/{username}/posts` | ⬜ |
+| GET    | `/users/{username}/posts` | ✅ 游标分页 |
 | GET    | `/users/{username}/photos` | ⬜ |
 | GET    | `/users/{username}/friends` | ⬜ |
-| GET    | `/users/me/interests` | ⬜ |
-| PUT    | `/users/me/interests` | ⬜ |
+| GET    | `/users/me/interests` | ✅ |
+| PUT    | `/users/me/interests` | ✅ |
 | POST   | `/users/me/interests` | ⬜ |
 | DELETE | `/users/me/interests/{tag}` | ⬜ |
+
+实现：`internal/users/handler.go`（me 读写、公开资料、用户帖子列表、interests 读写）；测试见 `internal/users/handler_test.go`。
 
 ---
 
@@ -161,10 +163,10 @@ DAO helper 入口：`internal/dao/media.go` (`MediaClient()` / `MediaBucketName(
 
 | Method | Path | 状态 |
 |---|---|:-:|
-| POST   | `/users/{username}/follow` | ⬜ |
-| DELETE | `/users/{username}/follow` | ⬜ |
-| GET    | `/users/{username}/followers` | ⬜ |
-| GET    | `/users/{username}/following` | ⬜ |
+| POST   | `/users/{username}/follow` | ✅ |
+| DELETE | `/users/{username}/follow` | ✅ |
+| GET    | `/users/{username}/followers` | ✅ 游标分页 |
+| GET    | `/users/{username}/following` | ✅ 游标分页 |
 | GET    | `/connections` | ⬜ |
 | DELETE | `/connections/{user_id}` | ⬜ |
 | GET    | `/connections/requests` | ⬜ |
@@ -172,6 +174,8 @@ DAO helper 入口：`internal/dao/media.go` (`MediaClient()` / `MediaBucketName(
 | POST   | `/connections/requests/{id}/accept` | ⬜ |
 | POST   | `/connections/requests/{id}/reject` | ⬜ |
 | POST   | `/users/me/contacts/sync` | ⬜ |
+
+实现：`internal/connections/handler.go`，基于 ent User 自关联 followers/following 边 + 游标分页；含 `IsFollowing` helper。
 
 ---
 
@@ -219,12 +223,14 @@ DAO helper 入口：`internal/dao/media.go` (`MediaClient()` / `MediaBucketName(
 | Method | Path | 状态 |
 |---|---|:-:|
 | POST | `/media/uploads` | ⬜ |
-| POST | `/media/uploads/presign` | ⬜ |
-| GET  | `/media/{id}` | ⬜ |
+| POST | `/media/uploads/presign` | ✅ 预签名 PUT，支持 avatar/cover/post/photo，含类型与大小校验 |
+| GET  | `/media/{id}` | ✅ S3 HEAD 返回元数据（媒体记录暂不入库） |
 | GET  | `/users/{username}/albums` | ⬜ |
 | GET  | `/users/me/photos` | ⬜ |
 | POST | `/users/me/photos` | ⬜ |
 | DELETE | `/photos/{id}` | ⬜ |
+
+实现：`internal/media/handler.go`；S3 key 约定已在 presign 中落地（见下表）。
 
 依赖：butterfly core `store/s3` 客户端。
 
