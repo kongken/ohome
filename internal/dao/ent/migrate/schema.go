@@ -8,6 +8,101 @@ import (
 )
 
 var (
+	// BookmarksColumns holds the columns for the "bookmarks" table.
+	BookmarksColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Unique: true, Size: 40},
+		{Name: "user_id", Type: field.TypeString, Size: 40},
+		{Name: "post_id", Type: field.TypeString, Size: 40},
+		{Name: "created_at", Type: field.TypeTime},
+	}
+	// BookmarksTable holds the schema information for the "bookmarks" table.
+	BookmarksTable = &schema.Table{
+		Name:       "bookmarks",
+		Columns:    BookmarksColumns,
+		PrimaryKey: []*schema.Column{BookmarksColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "bookmark_user_id_post_id",
+				Unique:  true,
+				Columns: []*schema.Column{BookmarksColumns[1], BookmarksColumns[2]},
+			},
+			{
+				Name:    "bookmark_user_id_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{BookmarksColumns[1], BookmarksColumns[3]},
+			},
+			{
+				Name:    "bookmark_post_id",
+				Unique:  false,
+				Columns: []*schema.Column{BookmarksColumns[2]},
+			},
+		},
+	}
+	// CommentsColumns holds the columns for the "comments" table.
+	CommentsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Unique: true, Size: 40},
+		{Name: "post_id", Type: field.TypeString, Size: 40},
+		{Name: "author_id", Type: field.TypeString, Size: 40},
+		{Name: "parent_id", Type: field.TypeString, Nullable: true, Size: 40},
+		{Name: "content", Type: field.TypeString, Size: 2147483647},
+		{Name: "likes_count", Type: field.TypeInt, Default: 0},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "deleted_at", Type: field.TypeTime, Nullable: true},
+	}
+	// CommentsTable holds the schema information for the "comments" table.
+	CommentsTable = &schema.Table{
+		Name:       "comments",
+		Columns:    CommentsColumns,
+		PrimaryKey: []*schema.Column{CommentsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "comment_post_id_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{CommentsColumns[1], CommentsColumns[6]},
+			},
+			{
+				Name:    "comment_parent_id_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{CommentsColumns[3], CommentsColumns[6]},
+			},
+			{
+				Name:    "comment_author_id_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{CommentsColumns[2], CommentsColumns[6]},
+			},
+		},
+	}
+	// CommentLikesColumns holds the columns for the "comment_likes" table.
+	CommentLikesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Unique: true, Size: 40},
+		{Name: "comment_id", Type: field.TypeString, Size: 40},
+		{Name: "user_id", Type: field.TypeString, Size: 40},
+		{Name: "created_at", Type: field.TypeTime},
+	}
+	// CommentLikesTable holds the schema information for the "comment_likes" table.
+	CommentLikesTable = &schema.Table{
+		Name:       "comment_likes",
+		Columns:    CommentLikesColumns,
+		PrimaryKey: []*schema.Column{CommentLikesColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "commentlike_comment_id_user_id",
+				Unique:  true,
+				Columns: []*schema.Column{CommentLikesColumns[1], CommentLikesColumns[2]},
+			},
+			{
+				Name:    "commentlike_comment_id_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{CommentLikesColumns[1], CommentLikesColumns[3]},
+			},
+			{
+				Name:    "commentlike_user_id_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{CommentLikesColumns[2], CommentLikesColumns[3]},
+			},
+		},
+	}
 	// PostsColumns holds the columns for the "posts" table.
 	PostsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Unique: true, Size: 40},
@@ -50,6 +145,61 @@ var (
 				Name:    "post_visibility_created_at",
 				Unique:  false,
 				Columns: []*schema.Column{PostsColumns[7], PostsColumns[11]},
+			},
+		},
+	}
+	// PostLikesColumns holds the columns for the "post_likes" table.
+	PostLikesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Unique: true, Size: 40},
+		{Name: "post_id", Type: field.TypeString, Size: 40},
+		{Name: "user_id", Type: field.TypeString, Size: 40},
+		{Name: "created_at", Type: field.TypeTime},
+	}
+	// PostLikesTable holds the schema information for the "post_likes" table.
+	PostLikesTable = &schema.Table{
+		Name:       "post_likes",
+		Columns:    PostLikesColumns,
+		PrimaryKey: []*schema.Column{PostLikesColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "postlike_post_id_user_id",
+				Unique:  true,
+				Columns: []*schema.Column{PostLikesColumns[1], PostLikesColumns[2]},
+			},
+			{
+				Name:    "postlike_post_id_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{PostLikesColumns[1], PostLikesColumns[3]},
+			},
+			{
+				Name:    "postlike_user_id_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{PostLikesColumns[2], PostLikesColumns[3]},
+			},
+		},
+	}
+	// PostSharesColumns holds the columns for the "post_shares" table.
+	PostSharesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Unique: true, Size: 40},
+		{Name: "post_id", Type: field.TypeString, Size: 40},
+		{Name: "user_id", Type: field.TypeString, Size: 40},
+		{Name: "created_at", Type: field.TypeTime},
+	}
+	// PostSharesTable holds the schema information for the "post_shares" table.
+	PostSharesTable = &schema.Table{
+		Name:       "post_shares",
+		Columns:    PostSharesColumns,
+		PrimaryKey: []*schema.Column{PostSharesColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "postshare_post_id_user_id",
+				Unique:  true,
+				Columns: []*schema.Column{PostSharesColumns[1], PostSharesColumns[2]},
+			},
+			{
+				Name:    "postshare_user_id_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{PostSharesColumns[2], PostSharesColumns[3]},
 			},
 		},
 	}
@@ -110,7 +260,12 @@ var (
 	}
 	// Tables holds all the tables in the schema.
 	Tables = []*schema.Table{
+		BookmarksTable,
+		CommentsTable,
+		CommentLikesTable,
 		PostsTable,
+		PostLikesTable,
+		PostSharesTable,
 		UsersTable,
 		UserFollowingTable,
 	}

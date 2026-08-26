@@ -9,6 +9,42 @@ import (
 	"github.com/kongken/ohome/internal/dao/ent"
 )
 
+// The BookmarkFunc type is an adapter to allow the use of ordinary
+// function as Bookmark mutator.
+type BookmarkFunc func(context.Context, *ent.BookmarkMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f BookmarkFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.BookmarkMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.BookmarkMutation", m)
+}
+
+// The CommentFunc type is an adapter to allow the use of ordinary
+// function as Comment mutator.
+type CommentFunc func(context.Context, *ent.CommentMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f CommentFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.CommentMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.CommentMutation", m)
+}
+
+// The CommentLikeFunc type is an adapter to allow the use of ordinary
+// function as CommentLike mutator.
+type CommentLikeFunc func(context.Context, *ent.CommentLikeMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f CommentLikeFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.CommentLikeMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.CommentLikeMutation", m)
+}
+
 // The PostFunc type is an adapter to allow the use of ordinary
 // function as Post mutator.
 type PostFunc func(context.Context, *ent.PostMutation) (ent.Value, error)
@@ -19,6 +55,30 @@ func (f PostFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error)
 		return f(ctx, mv)
 	}
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.PostMutation", m)
+}
+
+// The PostLikeFunc type is an adapter to allow the use of ordinary
+// function as PostLike mutator.
+type PostLikeFunc func(context.Context, *ent.PostLikeMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f PostLikeFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.PostLikeMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.PostLikeMutation", m)
+}
+
+// The PostShareFunc type is an adapter to allow the use of ordinary
+// function as PostShare mutator.
+type PostShareFunc func(context.Context, *ent.PostShareMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f PostShareFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.PostShareMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.PostShareMutation", m)
 }
 
 // The UserFunc type is an adapter to allow the use of ordinary

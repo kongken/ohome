@@ -12,7 +12,12 @@ import (
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
+	"github.com/kongken/ohome/internal/dao/ent/bookmark"
+	"github.com/kongken/ohome/internal/dao/ent/comment"
+	"github.com/kongken/ohome/internal/dao/ent/commentlike"
 	"github.com/kongken/ohome/internal/dao/ent/post"
+	"github.com/kongken/ohome/internal/dao/ent/postlike"
+	"github.com/kongken/ohome/internal/dao/ent/postshare"
 	"github.com/kongken/ohome/internal/dao/ent/user"
 )
 
@@ -74,8 +79,13 @@ var (
 func checkColumn(t, c string) error {
 	initCheck.Do(func() {
 		columnCheck = sql.NewColumnCheck(map[string]func(string) bool{
-			post.Table: post.ValidColumn,
-			user.Table: user.ValidColumn,
+			bookmark.Table:    bookmark.ValidColumn,
+			comment.Table:     comment.ValidColumn,
+			commentlike.Table: commentlike.ValidColumn,
+			post.Table:        post.ValidColumn,
+			postlike.Table:    postlike.ValidColumn,
+			postshare.Table:   postshare.ValidColumn,
+			user.Table:        user.ValidColumn,
 		})
 	})
 	return columnCheck(t, c)

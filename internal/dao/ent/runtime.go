@@ -5,7 +5,12 @@ package ent
 import (
 	"time"
 
+	"github.com/kongken/ohome/internal/dao/ent/bookmark"
+	"github.com/kongken/ohome/internal/dao/ent/comment"
+	"github.com/kongken/ohome/internal/dao/ent/commentlike"
 	"github.com/kongken/ohome/internal/dao/ent/post"
+	"github.com/kongken/ohome/internal/dao/ent/postlike"
+	"github.com/kongken/ohome/internal/dao/ent/postshare"
 	"github.com/kongken/ohome/internal/dao/ent/schema"
 	"github.com/kongken/ohome/internal/dao/ent/user"
 )
@@ -14,6 +19,76 @@ import (
 // (default values, validators, hooks and policies) and stitches it
 // to their package variables.
 func init() {
+	bookmarkFields := schema.Bookmark{}.Fields()
+	_ = bookmarkFields
+	// bookmarkDescUserID is the schema descriptor for user_id field.
+	bookmarkDescUserID := bookmarkFields[1].Descriptor()
+	// bookmark.UserIDValidator is a validator for the "user_id" field. It is called by the builders before save.
+	bookmark.UserIDValidator = bookmarkDescUserID.Validators[0].(func(string) error)
+	// bookmarkDescPostID is the schema descriptor for post_id field.
+	bookmarkDescPostID := bookmarkFields[2].Descriptor()
+	// bookmark.PostIDValidator is a validator for the "post_id" field. It is called by the builders before save.
+	bookmark.PostIDValidator = bookmarkDescPostID.Validators[0].(func(string) error)
+	// bookmarkDescCreatedAt is the schema descriptor for created_at field.
+	bookmarkDescCreatedAt := bookmarkFields[3].Descriptor()
+	// bookmark.DefaultCreatedAt holds the default value on creation for the created_at field.
+	bookmark.DefaultCreatedAt = bookmarkDescCreatedAt.Default.(func() time.Time)
+	// bookmarkDescID is the schema descriptor for id field.
+	bookmarkDescID := bookmarkFields[0].Descriptor()
+	// bookmark.IDValidator is a validator for the "id" field. It is called by the builders before save.
+	bookmark.IDValidator = bookmarkDescID.Validators[0].(func(string) error)
+	commentFields := schema.Comment{}.Fields()
+	_ = commentFields
+	// commentDescPostID is the schema descriptor for post_id field.
+	commentDescPostID := commentFields[1].Descriptor()
+	// comment.PostIDValidator is a validator for the "post_id" field. It is called by the builders before save.
+	comment.PostIDValidator = commentDescPostID.Validators[0].(func(string) error)
+	// commentDescAuthorID is the schema descriptor for author_id field.
+	commentDescAuthorID := commentFields[2].Descriptor()
+	// comment.AuthorIDValidator is a validator for the "author_id" field. It is called by the builders before save.
+	comment.AuthorIDValidator = commentDescAuthorID.Validators[0].(func(string) error)
+	// commentDescParentID is the schema descriptor for parent_id field.
+	commentDescParentID := commentFields[3].Descriptor()
+	// comment.ParentIDValidator is a validator for the "parent_id" field. It is called by the builders before save.
+	comment.ParentIDValidator = commentDescParentID.Validators[0].(func(string) error)
+	// commentDescLikesCount is the schema descriptor for likes_count field.
+	commentDescLikesCount := commentFields[5].Descriptor()
+	// comment.DefaultLikesCount holds the default value on creation for the likes_count field.
+	comment.DefaultLikesCount = commentDescLikesCount.Default.(int)
+	// comment.LikesCountValidator is a validator for the "likes_count" field. It is called by the builders before save.
+	comment.LikesCountValidator = commentDescLikesCount.Validators[0].(func(int) error)
+	// commentDescCreatedAt is the schema descriptor for created_at field.
+	commentDescCreatedAt := commentFields[6].Descriptor()
+	// comment.DefaultCreatedAt holds the default value on creation for the created_at field.
+	comment.DefaultCreatedAt = commentDescCreatedAt.Default.(func() time.Time)
+	// commentDescUpdatedAt is the schema descriptor for updated_at field.
+	commentDescUpdatedAt := commentFields[7].Descriptor()
+	// comment.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	comment.DefaultUpdatedAt = commentDescUpdatedAt.Default.(func() time.Time)
+	// comment.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	comment.UpdateDefaultUpdatedAt = commentDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// commentDescID is the schema descriptor for id field.
+	commentDescID := commentFields[0].Descriptor()
+	// comment.IDValidator is a validator for the "id" field. It is called by the builders before save.
+	comment.IDValidator = commentDescID.Validators[0].(func(string) error)
+	commentlikeFields := schema.CommentLike{}.Fields()
+	_ = commentlikeFields
+	// commentlikeDescCommentID is the schema descriptor for comment_id field.
+	commentlikeDescCommentID := commentlikeFields[1].Descriptor()
+	// commentlike.CommentIDValidator is a validator for the "comment_id" field. It is called by the builders before save.
+	commentlike.CommentIDValidator = commentlikeDescCommentID.Validators[0].(func(string) error)
+	// commentlikeDescUserID is the schema descriptor for user_id field.
+	commentlikeDescUserID := commentlikeFields[2].Descriptor()
+	// commentlike.UserIDValidator is a validator for the "user_id" field. It is called by the builders before save.
+	commentlike.UserIDValidator = commentlikeDescUserID.Validators[0].(func(string) error)
+	// commentlikeDescCreatedAt is the schema descriptor for created_at field.
+	commentlikeDescCreatedAt := commentlikeFields[3].Descriptor()
+	// commentlike.DefaultCreatedAt holds the default value on creation for the created_at field.
+	commentlike.DefaultCreatedAt = commentlikeDescCreatedAt.Default.(func() time.Time)
+	// commentlikeDescID is the schema descriptor for id field.
+	commentlikeDescID := commentlikeFields[0].Descriptor()
+	// commentlike.IDValidator is a validator for the "id" field. It is called by the builders before save.
+	commentlike.IDValidator = commentlikeDescID.Validators[0].(func(string) error)
 	postFields := schema.Post{}.Fields()
 	_ = postFields
 	// postDescAuthorID is the schema descriptor for author_id field.
@@ -66,6 +141,42 @@ func init() {
 	postDescID := postFields[0].Descriptor()
 	// post.IDValidator is a validator for the "id" field. It is called by the builders before save.
 	post.IDValidator = postDescID.Validators[0].(func(string) error)
+	postlikeFields := schema.PostLike{}.Fields()
+	_ = postlikeFields
+	// postlikeDescPostID is the schema descriptor for post_id field.
+	postlikeDescPostID := postlikeFields[1].Descriptor()
+	// postlike.PostIDValidator is a validator for the "post_id" field. It is called by the builders before save.
+	postlike.PostIDValidator = postlikeDescPostID.Validators[0].(func(string) error)
+	// postlikeDescUserID is the schema descriptor for user_id field.
+	postlikeDescUserID := postlikeFields[2].Descriptor()
+	// postlike.UserIDValidator is a validator for the "user_id" field. It is called by the builders before save.
+	postlike.UserIDValidator = postlikeDescUserID.Validators[0].(func(string) error)
+	// postlikeDescCreatedAt is the schema descriptor for created_at field.
+	postlikeDescCreatedAt := postlikeFields[3].Descriptor()
+	// postlike.DefaultCreatedAt holds the default value on creation for the created_at field.
+	postlike.DefaultCreatedAt = postlikeDescCreatedAt.Default.(func() time.Time)
+	// postlikeDescID is the schema descriptor for id field.
+	postlikeDescID := postlikeFields[0].Descriptor()
+	// postlike.IDValidator is a validator for the "id" field. It is called by the builders before save.
+	postlike.IDValidator = postlikeDescID.Validators[0].(func(string) error)
+	postshareFields := schema.PostShare{}.Fields()
+	_ = postshareFields
+	// postshareDescPostID is the schema descriptor for post_id field.
+	postshareDescPostID := postshareFields[1].Descriptor()
+	// postshare.PostIDValidator is a validator for the "post_id" field. It is called by the builders before save.
+	postshare.PostIDValidator = postshareDescPostID.Validators[0].(func(string) error)
+	// postshareDescUserID is the schema descriptor for user_id field.
+	postshareDescUserID := postshareFields[2].Descriptor()
+	// postshare.UserIDValidator is a validator for the "user_id" field. It is called by the builders before save.
+	postshare.UserIDValidator = postshareDescUserID.Validators[0].(func(string) error)
+	// postshareDescCreatedAt is the schema descriptor for created_at field.
+	postshareDescCreatedAt := postshareFields[3].Descriptor()
+	// postshare.DefaultCreatedAt holds the default value on creation for the created_at field.
+	postshare.DefaultCreatedAt = postshareDescCreatedAt.Default.(func() time.Time)
+	// postshareDescID is the schema descriptor for id field.
+	postshareDescID := postshareFields[0].Descriptor()
+	// postshare.IDValidator is a validator for the "id" field. It is called by the builders before save.
+	postshare.IDValidator = postshareDescID.Validators[0].(func(string) error)
 	userFields := schema.User{}.Fields()
 	_ = userFields
 	// userDescUsername is the schema descriptor for username field.
