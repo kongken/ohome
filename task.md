@@ -205,7 +205,7 @@ DAO helper 入口：`internal/dao/media.go` (`MediaClient()` / `MediaBucketName(
 | POST   | `/posts/{id}/share` | ✅ 计数每次累加；首次分享置 viewer.shared |
 | POST   | `/posts/{id}/bookmark` | ✅ 幂等收藏 |
 | DELETE | `/posts/{id}/bookmark` | ✅ 幂等取消 |
-| GET    | `/users/me/bookmarks` | ✅ 按收藏时间倒序游标分页，自动滤掉不可见帖 |
+| GET    | `/users/me/bookmarks` | ✅ 按收藏时间倒序游标分页，先过滤可见性再定页（不会出现空页 has_more） |
 
 实现：`internal/posts/interactions.go`；点赞/收藏在事务内维护关系行 + 计数器，feed 与详情响应中的 `viewer.{liked,bookmarked,shared}` 由批量查询填充。
 
@@ -216,7 +216,7 @@ DAO helper 入口：`internal/dao/media.go` (`MediaClient()` / `MediaBucketName(
 | GET    | `/posts/{id}/comments` | ✅ `parent_id` 过滤楼中楼；时间正序游标分页 |
 | POST   | `/posts/{id}/comments` | ✅ 支持回复；回复的回复扁平化到顶层父评论 |
 | PATCH  | `/comments/{id}` | ✅ 仅作者可编辑 |
-| DELETE | `/comments/{id}` | ✅ 仅作者；软删除 + comments_count 回减 |
+| DELETE | `/comments/{id}` | ✅ 仅作者；软删除并级联软删子回复 + comments_count 回减 |
 | POST   | `/comments/{id}/like` | ✅ 幂等 |
 | DELETE | `/comments/{id}/like` | ✅ 幂等 |
 

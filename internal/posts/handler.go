@@ -640,22 +640,35 @@ func isFollowing(ctx context.Context, followerID, targetID string) (bool, error)
 		Exist(ctx)
 }
 
-// loadVisiblePost fetches the :id post with visibility enforced; aborted
-// requests return ok=false.
-func (h *Handler) loadVisiblePost(c *gin.Context, ctx context.Context, viewerID string) (*ent.Post, bool) {
-	p, err := basePostQuery().
-		Where(entpost.IDEQ(c.Param("id"))).
-		Only(ctx)
+// visiblePostByID loads a post with visibility enforced; ok=false when the
+// post is missing or hidden from the viewer. Errors are returned unwritten.
+func visiblePostByID(ctx context.Context, viewerID, id string) (*ent.Post, bool, error) {
+	p, err := basePostQuery().Where(entpost.IDEQ(id)).Only(ctx)
+	if ent.IsNotFound(err) {
+		return nil, false, nil
+	}
 	if err != nil {
-		abortQuery(c, err, "post not found")
-		return nil, false
+		return nil, false, fmt.Errorf("load post: %w", err)
 	}
 	allowed, err := canView(ctx, p, viewerID)
 	if err != nil {
-		httpx.Abort(c, httpx.Internal("check visibility: "+err.Error()))
-		return nil, false
+		return nil, false, fmt.Errorf("check visibility: %w", err)
 	}
 	if !allowed {
+		return nil, false, nil
+	}
+	return p, true, nil
+}
+
+// loadVisiblePost fetches the :id post with visibility enforced; aborted
+// requests return ok=false.
+func (h *Handler) loadVisiblePost(c *gin.Context, ctx context.Context, viewerID string) (*ent.Post, bool) {
+	p, ok, err := visiblePostByID(ctx, viewerID, c.Param("id"))
+	if err != nil {
+		httpx.Abort(c, httpx.Internal(err.Error()))
+		return nil, false
+	}
+	if !ok {
 		httpx.Abort(c, httpx.NotFound("post not found"))
 		return nil, false
 	}
@@ -717,15 +730,7 @@ func applyCursor(ctx context.Context, query *ent.PostQuery, cursor string) ([]*e
 	if err != nil {
 		return nil, fmt.Errorf("cursor post not found: %w", err)
 	}
-	return query.Where(
-		entpost.Or(
-			entpost.CreatedAtLT(p.CreatedAt),
-			entpost.And(
-				entpost.CreatedAtEQ(p.CreatedAt),
-				entpost.IDLT(cursor),
-			),
-		),
-	).All(ctx)
+	return query.Where(postKeyset(false, p)).All(ctx)
 }
 
 func abortQuery(c *gin.Context, err error, notFound string) {

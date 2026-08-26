@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"entgo.io/ent/dialect/sql"
@@ -18,6 +19,7 @@ import (
 	entpost "github.com/kongken/ohome/internal/dao/ent/post"
 	entpostlike "github.com/kongken/ohome/internal/dao/ent/postlike"
 	entpostshare "github.com/kongken/ohome/internal/dao/ent/postshare"
+	"github.com/kongken/ohome/internal/dao/ent/predicate"
 	entuser "github.com/kongken/ohome/internal/dao/ent/user"
 	"github.com/kongken/ohome/internal/httpx"
 )
@@ -39,31 +41,50 @@ func (h *Handler) RegisterBookmarks(g *gin.RouterGroup) {
 }
 
 func (h *Handler) likePost(c *gin.Context) {
-	viewerID := auth.UserID(c)
-	if viewerID == "" {
-		httpx.Abort(c, httpx.Unauthorized(""))
-		return
-	}
-	h.mutatePostLikeState(c, func(ctx context.Context, tx *ent.Tx, postID string) error {
-		return likePostTx(ctx, tx, postID, viewerID)
+	uid := auth.UserID(c)
+	h.mutateVisiblePost(c, func(ctx context.Context, tx *ent.Tx, p *ent.Post) error {
+		return likePostTx(ctx, tx, p.ID, uid)
 	})
 }
 
 func (h *Handler) unlikePost(c *gin.Context) {
+	uid := auth.UserID(c)
+	h.mutateVisiblePost(c, func(ctx context.Context, tx *ent.Tx, p *ent.Post) error {
+		return unlikePostTx(ctx, tx, p.ID, uid)
+	})
+}
+
+func (h *Handler) sharePost(c *gin.Context) {
+	uid := auth.UserID(c)
+	h.mutateVisiblePost(c, func(ctx context.Context, tx *ent.Tx, p *ent.Post) error {
+		return sharePostTx(ctx, tx, p.ID, uid)
+	})
+}
+
+func (h *Handler) bookmarkPost(c *gin.Context) {
+	uid := auth.UserID(c)
+	h.mutateVisiblePost(c, func(ctx context.Context, tx *ent.Tx, p *ent.Post) error {
+		return bookmarkPostTx(ctx, tx, p.ID, uid)
+	})
+}
+
+func (h *Handler) unbookmarkPost(c *gin.Context) {
+	uid := auth.UserID(c)
+	h.mutateVisiblePost(c, func(ctx context.Context, tx *ent.Tx, p *ent.Post) error {
+		return unbookmarkPostTx(ctx, tx, p.ID, uid)
+	})
+}
+
+// mutateVisiblePost is the shared scaffold for post-state mutations:
+// authenticate, load the :id post with visibility enforced, run mutate in a
+// transaction, commit, and respond with the refreshed post response.
+// Aborts with 401 when unauthenticated; never invokes mutate in that case.
+func (h *Handler) mutateVisiblePost(c *gin.Context, mutate func(context.Context, *ent.Tx, *ent.Post) error) {
 	viewerID := auth.UserID(c)
 	if viewerID == "" {
 		httpx.Abort(c, httpx.Unauthorized(""))
 		return
 	}
-	h.mutatePostLikeState(c, func(ctx context.Context, tx *ent.Tx, postID string) error {
-		return unlikePostTx(ctx, tx, postID, viewerID)
-	})
-}
-
-// mutatePostLikeState loads the post (with visibility check), runs the given
-// mutation in a transaction, and responds with the refreshed post response.
-func (h *Handler) mutatePostLikeState(c *gin.Context, mutate func(context.Context, *ent.Tx, string) error) {
-	viewerID := auth.UserID(c)
 
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
 	defer cancel()
@@ -72,13 +93,16 @@ func (h *Handler) mutatePostLikeState(c *gin.Context, mutate func(context.Contex
 	if !ok {
 		return
 	}
+	h.runPostMutation(c, ctx, p, viewerID, mutate)
+}
 
+func (h *Handler) runPostMutation(c *gin.Context, ctx context.Context, p *ent.Post, viewerID string, mutate func(context.Context, *ent.Tx, *ent.Post) error) {
 	tx, err := dao.Client().Tx(ctx)
 	if err != nil {
 		httpx.Abort(c, httpx.Internal("begin tx: "+err.Error()))
 		return
 	}
-	if err := mutate(ctx, tx, p.ID); err != nil {
+	if err := mutate(ctx, tx, p); err != nil {
 		_ = tx.Rollback()
 		httpx.Abort(c, httpx.Internal("update post state: "+err.Error()))
 		return
@@ -101,6 +125,72 @@ func (h *Handler) mutatePostLikeState(c *gin.Context, mutate func(context.Contex
 	c.JSON(http.StatusOK, resp)
 }
 
+const (
+	keysetColCreatedAt = "created_at"
+	keysetColID        = "id"
+)
+
+// keysetPredicate builds the shared (created_at, id) comparison predicate:
+// rows strictly older than the cursor position for desc order, strictly
+// newer for asc. Single-table queries only (columns are unqualified).
+func keysetPredicate(asc bool, createdAt time.Time, id string) *sql.Predicate {
+	before := sql.LT(keysetColCreatedAt, createdAt)
+	idTie := sql.LT(keysetColID, id)
+	if asc {
+		before = sql.GT(keysetColCreatedAt, createdAt)
+		idTie = sql.GT(keysetColID, id)
+	}
+	return sql.Or(before, sql.And(sql.EQ(keysetColCreatedAt, createdAt), idTie))
+}
+
+// Per-entity adapters bridging the shared predicate to typed queries.
+
+func postKeyset(asc bool, row *ent.Post) predicate.Post {
+	return func(s *sql.Selector) { s.Where(keysetPredicate(asc, row.CreatedAt, row.ID)) }
+}
+
+func postLikeKeyset(asc bool, row *ent.PostLike) predicate.PostLike {
+	return func(s *sql.Selector) { s.Where(keysetPredicate(asc, row.CreatedAt, row.ID)) }
+}
+
+func bookmarkKeyset(asc bool, row *ent.Bookmark) predicate.Bookmark {
+	return func(s *sql.Selector) { s.Where(keysetPredicate(asc, row.CreatedAt, row.ID)) }
+}
+
+func commentKeyset(asc bool, row *ent.Comment) predicate.Comment {
+	return func(s *sql.Selector) { s.Where(keysetPredicate(asc, row.CreatedAt, row.ID)) }
+}
+
+// insertOnce runs create, treating a unique-constraint failure as success
+// (false): a concurrent duplicate request raced past the existence check.
+// Returns whether this call newly inserted the row.
+func insertOnce(create func() error) (bool, error) {
+	err := create()
+	switch {
+	case err == nil:
+		return true, nil
+	case isUniqueViolation(err):
+		return false, nil
+	default:
+		return false, err
+	}
+}
+
+// isUniqueViolation covers ent's typed wrapper plus raw driver strings so it
+// also works for errors that skipped the ent wrapping layer.
+func isUniqueViolation(err error) bool {
+	if err == nil {
+		return false
+	}
+	if ent.IsConstraintError(err) {
+		return true
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "violates unique constraint") || // Postgres
+		strings.Contains(msg, "UNIQUE constraint failed") || // SQLite
+		strings.Contains(msg, "Error 1062") // MySQL
+}
+
 func likePostTx(ctx context.Context, tx *ent.Tx, postID, userID string) error {
 	exists, err := tx.PostLike.Query().
 		Where(entpostlike.PostIDEQ(postID), entpostlike.UserIDEQ(userID)).
@@ -111,12 +201,16 @@ func likePostTx(ctx context.Context, tx *ent.Tx, postID, userID string) error {
 	if exists {
 		return nil // idempotent re-like
 	}
-	if _, err := tx.PostLike.Create().
-		SetID(uuid.NewString()).
-		SetPostID(postID).
-		SetUserID(userID).
-		Save(ctx); err != nil {
-		return fmt.Errorf("create like: %w", err)
+	inserted, err := insertOnce(func() error {
+		_, err := tx.PostLike.Create().
+			SetID(uuid.NewString()).
+			SetPostID(postID).
+			SetUserID(userID).
+			Save(ctx)
+		return err
+	})
+	if err != nil || !inserted {
+		return err // concurrent duplicate: already counted
 	}
 	return tx.Post.UpdateOneID(postID).AddLikesCount(1).Exec(ctx)
 }
@@ -134,143 +228,53 @@ func unlikePostTx(ctx context.Context, tx *ent.Tx, postID, userID string) error 
 	return tx.Post.UpdateOneID(postID).AddLikesCount(-1).Exec(ctx)
 }
 
-func (h *Handler) sharePost(c *gin.Context) {
-	viewerID := auth.UserID(c)
-	if viewerID == "" {
-		httpx.Abort(c, httpx.Unauthorized(""))
-		return
-	}
-
-	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
-	defer cancel()
-
-	p, ok := h.loadVisiblePost(c, ctx, viewerID)
-	if !ok {
-		return
-	}
-
-	tx, err := dao.Client().Tx(ctx)
-	if err != nil {
-		httpx.Abort(c, httpx.Internal("begin tx: "+err.Error()))
-		return
-	}
+// sharePostTx records that this user shared the post and bumps the share
+// counter for every share event; the row only backs the viewer.shared flag.
+func sharePostTx(ctx context.Context, tx *ent.Tx, postID, userID string) error {
 	exists, err := tx.PostShare.Query().
-		Where(entpostshare.PostIDEQ(p.ID), entpostshare.UserIDEQ(viewerID)).
+		Where(entpostshare.PostIDEQ(postID), entpostshare.UserIDEQ(userID)).
 		Exist(ctx)
 	if err != nil {
-		_ = tx.Rollback()
-		httpx.Abort(c, httpx.Internal("check share: "+err.Error()))
-		return
+		return fmt.Errorf("check share: %w", err)
 	}
 	if !exists {
 		if _, err := tx.PostShare.Create().
 			SetID(uuid.NewString()).
-			SetPostID(p.ID).
-			SetUserID(viewerID).
-			Save(ctx); err != nil {
-			_ = tx.Rollback()
-			httpx.Abort(c, httpx.Internal("create share: "+err.Error()))
-			return
+			SetPostID(postID).
+			SetUserID(userID).
+			Save(ctx); err != nil && !isUniqueViolation(err) {
+			return fmt.Errorf("create share: %w", err)
 		}
 	}
-	// Every share event bumps the counter; the PostShare row only tracks
-	// whether this viewer has shared before (viewer.shared flag).
-	if err := tx.Post.UpdateOneID(p.ID).AddSharesCount(1).Exec(ctx); err != nil {
-		_ = tx.Rollback()
-		httpx.Abort(c, httpx.Internal("update share count: "+err.Error()))
-		return
-	}
-	if err := tx.Commit(); err != nil {
-		httpx.Abort(c, httpx.Internal("commit: "+err.Error()))
-		return
-	}
-
-	fresh, err := basePostQuery().Where(entpost.IDEQ(p.ID)).Only(ctx)
-	if err != nil {
-		httpx.Abort(c, httpx.Internal("load post: "+err.Error()))
-		return
-	}
-	resp, err := h.toResponse(ctx, fresh, viewerID)
-	if err != nil {
-		httpx.Abort(c, httpx.Internal("load post: "+err.Error()))
-		return
-	}
-	c.JSON(http.StatusOK, resp)
+	return tx.Post.UpdateOneID(postID).AddSharesCount(1).Exec(ctx)
 }
 
-func (h *Handler) bookmarkPost(c *gin.Context) {
-	viewerID := auth.UserID(c)
-	if viewerID == "" {
-		httpx.Abort(c, httpx.Unauthorized(""))
-		return
+func bookmarkPostTx(ctx context.Context, tx *ent.Tx, postID, userID string) error {
+	exists, err := tx.Bookmark.Query().
+		Where(entbookmark.UserIDEQ(userID), entbookmark.PostIDEQ(postID)).
+		Exist(ctx)
+	if err != nil {
+		return fmt.Errorf("check bookmark: %w", err)
 	}
-	h.mutateBookmark(c, func(ctx context.Context, tx *ent.Tx, postID string) error {
-		exists, err := tx.Bookmark.Query().
-			Where(entbookmark.UserIDEQ(viewerID), entbookmark.PostIDEQ(postID)).
-			Exist(ctx)
-		if err != nil {
-			return fmt.Errorf("check bookmark: %w", err)
-		}
-		if exists {
-			return nil // idempotent re-bookmark
-		}
-		_, err = tx.Bookmark.Create().
+	if exists {
+		return nil // idempotent re-bookmark
+	}
+	_, err = insertOnce(func() error {
+		_, err := tx.Bookmark.Create().
 			SetID(uuid.NewString()).
-			SetUserID(viewerID).
+			SetUserID(userID).
 			SetPostID(postID).
 			Save(ctx)
 		return err
 	})
+	return err
 }
 
-func (h *Handler) unbookmarkPost(c *gin.Context) {
-	viewerID := auth.UserID(c)
-	if viewerID == "" {
-		httpx.Abort(c, httpx.Unauthorized(""))
-		return
-	}
-	h.mutateBookmark(c, func(ctx context.Context, tx *ent.Tx, postID string) error {
-		_, err := tx.Bookmark.Delete().
-			Where(entbookmark.UserIDEQ(viewerID), entbookmark.PostIDEQ(postID)).
-			Exec(ctx)
-		return err
-	})
-}
-
-// mutateBookmark loads the post (visibility checked), applies a bookmark
-// mutation in a transaction and answers with the refreshed post response.
-func (h *Handler) mutateBookmark(c *gin.Context, mutate func(context.Context, *ent.Tx, string) error) {
-	viewerID := auth.UserID(c)
-
-	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
-	defer cancel()
-
-	p, ok := h.loadVisiblePost(c, ctx, viewerID)
-	if !ok {
-		return
-	}
-
-	tx, err := dao.Client().Tx(ctx)
-	if err != nil {
-		httpx.Abort(c, httpx.Internal("begin tx: "+err.Error()))
-		return
-	}
-	if err := mutate(ctx, tx, p.ID); err != nil {
-		_ = tx.Rollback()
-		httpx.Abort(c, httpx.Internal("update bookmark: "+err.Error()))
-		return
-	}
-	if err := tx.Commit(); err != nil {
-		httpx.Abort(c, httpx.Internal("commit: "+err.Error()))
-		return
-	}
-
-	resp, err := h.toResponse(ctx, p, viewerID)
-	if err != nil {
-		httpx.Abort(c, httpx.Internal("load post: "+err.Error()))
-		return
-	}
-	c.JSON(http.StatusOK, resp)
+func unbookmarkPostTx(ctx context.Context, tx *ent.Tx, postID, userID string) error {
+	_, err := tx.Bookmark.Delete().
+		Where(entbookmark.UserIDEQ(userID), entbookmark.PostIDEQ(postID)).
+		Exec(ctx)
+	return err
 }
 
 func (h *Handler) listLikes(c *gin.Context) {
@@ -321,57 +325,58 @@ func (h *Handler) listLikes(c *gin.Context) {
 	})
 }
 
+// listBookmarks pages over the viewer's bookmark rows and filters out posts
+// they may no longer see BEFORE page boundaries are fixed, so clients never
+// receive an empty page while has_more=true (cursor always advances).
 func (h *Handler) listBookmarks(c *gin.Context) {
 	viewerID := auth.UserID(c)
-	page := httpx.ParsePage(c)
 
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
 	defer cancel()
 
-	query := dao.Client().Bookmark.Query().
-		Where(entbookmark.UserIDEQ(viewerID)).
-		Order(entbookmark.ByCreatedAt(sql.OrderDesc()), entbookmark.ByID(sql.OrderDesc())).
-		Limit(page.Limit + 1)
-	rows, err := applyBookmarkCursor(ctx, query, page.Cursor)
-	if err != nil {
-		httpx.Abort(c, httpx.BadQuery("invalid cursor"))
-		return
-	}
+	var visible []*ent.Post
+	probe := httpx.ParsePage(c)
+	limit := probe.Limit
+	cursor := probe.Cursor
 
-	hasMore := len(rows) > page.Limit
-	if hasMore {
-		rows = rows[:page.Limit]
-	}
-
-	// Keep bookmark order (newest saved first) while filtering out posts the
-	// viewer is no longer allowed to see (e.g. since turned private).
-	postIDs := make([]string, len(rows))
-	for i, r := range rows {
-		postIDs[i] = r.PostID
-	}
-	loaded, err := basePostQuery().Where(entpost.IDIn(postIDs...)).All(ctx)
-	if err != nil {
-		httpx.Abort(c, httpx.Internal("load posts: "+err.Error()))
-		return
-	}
-	byID := make(map[string]*ent.Post, len(loaded))
-	for _, p := range loaded {
-		byID[p.ID] = p
-	}
-	visible := make([]*ent.Post, 0, len(postIDs))
-	for _, id := range postIDs {
-		p, ok := byID[id]
-		if !ok {
-			continue
-		}
-		allowed, err := canView(ctx, p, viewerID)
+	for {
+		query := dao.Client().Bookmark.Query().
+			Where(entbookmark.UserIDEQ(viewerID)).
+			Order(entbookmark.ByCreatedAt(sql.OrderDesc()), entbookmark.ByID(sql.OrderDesc())).
+			Limit(limit + 1)
+		rows, err := applyBookmarkCursor(ctx, query, cursor)
 		if err != nil {
-			httpx.Abort(c, httpx.Internal("check visibility: "+err.Error()))
+			httpx.Abort(c, httpx.BadQuery("invalid cursor"))
 			return
 		}
-		if allowed {
-			visible = append(visible, p)
+		if len(rows) == 0 {
+			break
 		}
+
+		overflow := false
+		for _, r := range rows {
+			cursor = r.ID
+			p, ok, err := visiblePostByID(ctx, viewerID, r.PostID)
+			if err != nil {
+				httpx.Abort(c, httpx.Internal("load post: "+err.Error()))
+				return
+			}
+			if !ok {
+				continue
+			}
+			visible = append(visible, p)
+			if len(visible) > limit {
+				overflow = true
+				break
+			}
+		}
+		if overflow || len(rows) < limit+1 {
+			break
+		}
+	}
+	hasMore := len(visible) > limit
+	if hasMore {
+		visible = visible[:limit]
 	}
 
 	resp, err := h.toResponses(ctx, visible, viewerID)
@@ -381,8 +386,8 @@ func (h *Handler) listBookmarks(c *gin.Context) {
 	}
 
 	var nextCursor string
-	if hasMore && len(rows) > 0 {
-		nextCursor = rows[len(rows)-1].ID
+	if hasMore {
+		nextCursor = cursor
 	}
 	c.JSON(http.StatusOK, gin.H{
 		"items":       resp,
@@ -399,15 +404,7 @@ func applyRelationCursor(ctx context.Context, query *ent.PostLikeQuery, cursor s
 	if err != nil {
 		return nil, fmt.Errorf("cursor row not found: %w", err)
 	}
-	return query.Where(
-		entpostlike.Or(
-			entpostlike.CreatedAtLT(row.CreatedAt),
-			entpostlike.And(
-				entpostlike.CreatedAtEQ(row.CreatedAt),
-				entpostlike.IDLT(cursor),
-			),
-		),
-	).All(ctx)
+	return query.Where(postLikeKeyset(false, row)).All(ctx)
 }
 
 func applyBookmarkCursor(ctx context.Context, query *ent.BookmarkQuery, cursor string) ([]*ent.Bookmark, error) {
@@ -418,19 +415,12 @@ func applyBookmarkCursor(ctx context.Context, query *ent.BookmarkQuery, cursor s
 	if err != nil {
 		return nil, fmt.Errorf("cursor row not found: %w", err)
 	}
-	return query.Where(
-		entbookmark.Or(
-			entbookmark.CreatedAtLT(row.CreatedAt),
-			entbookmark.And(
-				entbookmark.CreatedAtEQ(row.CreatedAt),
-				entbookmark.IDLT(cursor),
-			),
-		),
-	).All(ctx)
+	return query.Where(bookmarkKeyset(false, row)).All(ctx)
 }
 
 // userSummariesByIDs builds UserSummary values in the given ID order,
-// batch-loading users and follow status in two queries.
+// batch-loading users and follow status in two queries. Users that vanished
+// since liking are silently skipped (consistent with comment lists).
 func userSummariesByIDs(ctx context.Context, ids []string, viewerID string) ([]connections.UserSummary, error) {
 	out := make([]connections.UserSummary, 0, len(ids))
 	if len(ids) == 0 {
@@ -464,7 +454,7 @@ func userSummariesByIDs(ctx context.Context, ids []string, viewerID string) ([]c
 	for _, id := range ids {
 		u, ok := byID[id]
 		if !ok {
-			continue // user deleted since liking
+			continue
 		}
 		out = append(out, connections.UserSummary{
 			ID:          u.ID,

@@ -243,17 +243,32 @@ func (h *Handler) deleteComment(c *gin.Context) {
 		httpx.Abort(c, httpx.Internal("begin tx: "+err.Error()))
 		return
 	}
-	if _, err := tx.Comment.UpdateOneID(cm.ID).
+	// Cascade-soft-delete direct replies so they don't become unreachable:
+	// threads are one level deep, so replies have no children of their own.
+	replyIDs, err := baseCommentQuery().
+		Where(entcomment.ParentIDEQ(cm.ID)).
+		IDs(ctx)
+	if err != nil {
+		_ = tx.Rollback()
+		httpx.Abort(c, httpx.Internal("load replies: "+err.Error()))
+		return
+	}
+	ids := append([]string{cm.ID}, replyIDs...)
+	deleted, err := tx.Comment.Update().
+		Where(entcomment.IDIn(ids...)).
 		SetDeletedAt(time.Now()).
-		Save(ctx); err != nil {
+		Save(ctx)
+	if err != nil {
 		_ = tx.Rollback()
 		httpx.Abort(c, httpx.Internal("delete comment: "+err.Error()))
 		return
 	}
-	if err := tx.Post.UpdateOneID(cm.PostID).AddCommentsCount(-1).Exec(ctx); err != nil {
-		_ = tx.Rollback()
-		httpx.Abort(c, httpx.Internal("update post counter: "+err.Error()))
-		return
+	if deleted > 0 {
+		if err := tx.Post.UpdateOneID(cm.PostID).AddCommentsCount(-deleted).Exec(ctx); err != nil {
+			_ = tx.Rollback()
+			httpx.Abort(c, httpx.Internal("update post counter: "+err.Error()))
+			return
+		}
 	}
 	if err := tx.Commit(); err != nil {
 		httpx.Abort(c, httpx.Internal("commit: "+err.Error()))
@@ -263,56 +278,28 @@ func (h *Handler) deleteComment(c *gin.Context) {
 }
 
 func (h *Handler) likeComment(c *gin.Context) {
-	viewerID := auth.UserID(c)
-	if viewerID == "" {
-		httpx.Abort(c, httpx.Unauthorized(""))
-		return
-	}
-	h.mutateCommentLikeState(c, func(ctx context.Context, tx *ent.Tx, commentID string) error {
-		exists, err := tx.CommentLike.Query().
-			Where(entcommentlike.CommentIDEQ(commentID), entcommentlike.UserIDEQ(viewerID)).
-			Exist(ctx)
-		if err != nil {
-			return fmt.Errorf("check like: %w", err)
-		}
-		if exists {
-			return nil // idempotent re-like
-		}
-		if _, err := tx.CommentLike.Create().
-			SetID(uuid.NewString()).
-			SetCommentID(commentID).
-			SetUserID(viewerID).
-			Save(ctx); err != nil {
-			return fmt.Errorf("create like: %w", err)
-		}
-		return tx.Comment.UpdateOneID(commentID).AddLikesCount(1).Exec(ctx)
+	uid := auth.UserID(c)
+	h.mutateVisibleComment(c, func(ctx context.Context, tx *ent.Tx, cm *ent.Comment) error {
+		return likeCommentTx(ctx, tx, cm.ID, uid)
 	})
 }
 
 func (h *Handler) unlikeComment(c *gin.Context) {
+	uid := auth.UserID(c)
+	h.mutateVisibleComment(c, func(ctx context.Context, tx *ent.Tx, cm *ent.Comment) error {
+		return unlikeCommentTx(ctx, tx, cm.ID, uid)
+	})
+}
+
+// mutateVisibleComment mirrors mutateVisiblePost for comment-level mutations:
+// authenticate, load with visibility enforced, mutate in a transaction,
+// commit and respond with the refreshed comment.
+func (h *Handler) mutateVisibleComment(c *gin.Context, mutate func(context.Context, *ent.Tx, *ent.Comment) error) {
 	viewerID := auth.UserID(c)
 	if viewerID == "" {
 		httpx.Abort(c, httpx.Unauthorized(""))
 		return
 	}
-	h.mutateCommentLikeState(c, func(ctx context.Context, tx *ent.Tx, commentID string) error {
-		n, err := tx.CommentLike.Delete().
-			Where(entcommentlike.CommentIDEQ(commentID), entcommentlike.UserIDEQ(viewerID)).
-			Exec(ctx)
-		if err != nil {
-			return fmt.Errorf("delete like: %w", err)
-		}
-		if n == 0 {
-			return nil // idempotent re-unlike
-		}
-		return tx.Comment.UpdateOneID(commentID).AddLikesCount(-1).Exec(ctx)
-	})
-}
-
-// mutateCommentLikeState loads the comment and its post (visibility checked),
-// runs the mutation in a transaction and responds with the fresh comment.
-func (h *Handler) mutateCommentLikeState(c *gin.Context, mutate func(context.Context, *ent.Tx, string) error) {
-	viewerID := auth.UserID(c)
 
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
 	defer cancel()
@@ -327,7 +314,7 @@ func (h *Handler) mutateCommentLikeState(c *gin.Context, mutate func(context.Con
 		httpx.Abort(c, httpx.Internal("begin tx: "+err.Error()))
 		return
 	}
-	if err := mutate(ctx, tx, cm.ID); err != nil {
+	if err := mutate(ctx, tx, cm); err != nil {
 		_ = tx.Rollback()
 		httpx.Abort(c, httpx.Internal("update comment state: "+err.Error()))
 		return
@@ -343,6 +330,43 @@ func (h *Handler) mutateCommentLikeState(c *gin.Context, mutate func(context.Con
 		return
 	}
 	h.respondWithComment(c, ctx, fresh, viewerID)
+}
+
+func likeCommentTx(ctx context.Context, tx *ent.Tx, commentID, userID string) error {
+	exists, err := tx.CommentLike.Query().
+		Where(entcommentlike.CommentIDEQ(commentID), entcommentlike.UserIDEQ(userID)).
+		Exist(ctx)
+	if err != nil {
+		return fmt.Errorf("check like: %w", err)
+	}
+	if exists {
+		return nil // idempotent re-like
+	}
+	inserted, err := insertOnce(func() error {
+		_, err := tx.CommentLike.Create().
+			SetID(uuid.NewString()).
+			SetCommentID(commentID).
+			SetUserID(userID).
+			Save(ctx)
+		return err
+	})
+	if err != nil || !inserted {
+		return err // concurrent duplicate: already counted
+	}
+	return tx.Comment.UpdateOneID(commentID).AddLikesCount(1).Exec(ctx)
+}
+
+func unlikeCommentTx(ctx context.Context, tx *ent.Tx, commentID, userID string) error {
+	n, err := tx.CommentLike.Delete().
+		Where(entcommentlike.CommentIDEQ(commentID), entcommentlike.UserIDEQ(userID)).
+		Exec(ctx)
+	if err != nil {
+		return fmt.Errorf("delete like: %w", err)
+	}
+	if n == 0 {
+		return nil // idempotent re-unlike
+	}
+	return tx.Comment.UpdateOneID(commentID).AddLikesCount(-1).Exec(ctx)
 }
 
 func validateCommentContent(content string) error {
@@ -443,13 +467,13 @@ func (h *Handler) toCommentResponses(ctx context.Context, comments []*ent.Commen
 		}
 	}
 
-	out := make([]commentResponse, len(comments))
-	for i, cm := range comments {
+	out := make([]commentResponse, 0, len(comments))
+	for _, cm := range comments {
 		author, ok := authors[cm.AuthorID]
 		if !ok {
-			return nil, fmt.Errorf("author %s not found", cm.AuthorID)
+			continue // author vanished since posting; skip silently (same as likes lists)
 		}
-		out[i] = buildCommentResponse(cm, author, liked[cm.ID])
+		out = append(out, buildCommentResponse(cm, author, liked[cm.ID]))
 	}
 	return out, nil
 }
@@ -506,13 +530,5 @@ func applyCommentCursor(ctx context.Context, query *ent.CommentQuery, cursor str
 	if err != nil {
 		return nil, fmt.Errorf("cursor comment not found: %w", err)
 	}
-	return query.Where(
-		entcomment.Or(
-			entcomment.CreatedAtGT(cm.CreatedAt),
-			entcomment.And(
-				entcomment.CreatedAtEQ(cm.CreatedAt),
-				entcomment.IDGT(cursor),
-			),
-		),
-	).All(ctx)
+	return query.Where(commentKeyset(true, cm)).All(ctx)
 }

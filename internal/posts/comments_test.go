@@ -1,9 +1,13 @@
 package posts
 
 import (
+	"errors"
 	"strings"
 	"testing"
 	"time"
+
+	"entgo.io/ent/dialect"
+	"entgo.io/ent/dialect/sql"
 
 	"github.com/kongken/ohome/internal/dao/ent"
 )
@@ -110,5 +114,63 @@ func TestBuildResponseAppliesViewerState(t *testing.T) {
 	}
 	if resp.Stats.Likes != 7 || resp.Stats.Comments != 2 || resp.Stats.Shares != 1 {
 		t.Fatalf("stats = %#v", resp.Stats)
+	}
+}
+
+func TestIsUniqueViolationMatchesDriverStrings(t *testing.T) {
+	if !isUniqueViolation(errors.New("pq: duplicate key value violates unique constraint \"post_likes_post_id_user_id_key\"")) {
+		t.Fatal("unique violation not detected from Postgres message")
+	}
+	if !isUniqueViolation(errors.New("UNIQUE constraint failed: post_likes.post_id")) {
+		t.Fatal("unique violation not detected from SQLite message")
+	}
+	if isUniqueViolation(errors.New("connection reset")) {
+		t.Fatal("non-constraint error misclassified as unique violation")
+	}
+	if isUniqueViolation(nil) {
+		t.Fatal("nil error misclassified as unique violation")
+	}
+}
+
+func TestInsertOnceTreatsConflictAsSuccess(t *testing.T) {
+	inserted, err := insertOnce(func() error { return nil })
+	if !inserted || err != nil {
+		t.Fatalf("fresh insert = (%v, %v), want (true, nil)", inserted, err)
+	}
+
+	conflict := func() error {
+		return errors.New("violates unique constraint")
+	}
+	inserted, err = insertOnce(conflict)
+	if inserted || err != nil {
+		t.Fatalf("conflicting insert = (%v, %v), want (false, nil)", inserted, err)
+	}
+
+	boom := errors.New("boom")
+	inserted, err = insertOnce(func() error { return boom })
+	if inserted || !errors.Is(err, boom) {
+		t.Fatalf("failed insert = (%v, %v), want (false, boom)", inserted, err)
+	}
+}
+
+func TestKeysetPredicateDirection(t *testing.T) {
+	ts := time.Date(2026, 8, 25, 10, 0, 0, 0, time.UTC)
+
+	queryFor := func(asc bool) (string, []any) {
+		sb := sql.Dialect(dialect.Postgres).Select().From(sql.Table("rows"))
+		return sb.Where(keysetPredicate(asc, ts, "row_9")).Query()
+	}
+
+	descQ, descArgs := queryFor(false)
+	ascQ, ascArgs := queryFor(true)
+
+	if !strings.Contains(descQ, "<") || strings.Contains(descQ, ">") {
+		t.Fatalf("desc predicate should compare strictly older (<), got %q", descQ)
+	}
+	if !strings.Contains(ascQ, ">") || strings.Contains(ascQ, "<") {
+		t.Fatalf("asc predicate should compare strictly newer (>), got %q", ascQ)
+	}
+	if len(descArgs) != 3 || len(ascArgs) != 3 {
+		t.Fatalf("args = desc:%d asc:%d, want 3 each (ts, ts, id)", len(descArgs), len(ascArgs))
 	}
 }
