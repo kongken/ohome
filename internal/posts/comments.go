@@ -245,8 +245,11 @@ func (h *Handler) deleteComment(c *gin.Context) {
 	}
 	// Cascade-soft-delete direct replies so they don't become unreachable:
 	// threads are one level deep, so replies have no children of their own.
-	replyIDs, err := baseCommentQuery().
-		Where(entcomment.ParentIDEQ(cm.ID)).
+	// Query through tx (not baseCommentQuery) so the snapshot is consistent
+	// with the batch delete below and replies inserted concurrently are
+	// either visible to both or neither.
+	replyIDs, err := tx.Comment.Query().
+		Where(entcomment.DeletedAtIsNil(), entcomment.ParentIDEQ(cm.ID)).
 		IDs(ctx)
 	if err != nil {
 		_ = tx.Rollback()
