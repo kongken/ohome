@@ -16,8 +16,8 @@
 | 2. Users / Profile | ✅ | 🚧 | 🚧 | ✅ | 🚧 |
 | 3. Connections | ✅ | 🚧 | 🚧 | 🚧 | ⬜ |
 | 4. Posts & Feed | ✅ | 🚧 | 🚧 | 🚧 | 🚧 |
-| 4.1 互动 (Like/Bookmark/Share) | ✅ | ⬜ | ⬜ | ⬜ | ⬜ |
-| 4.2 Comments | ✅ | ⬜ | ⬜ | ⬜ | ⬜ |
+| 4.1 互动 (Like/Bookmark/Share) | ✅ | ✅ | ✅ | ✅ | 🚧 |
+| 4.2 Comments | ✅ | ✅ | ✅ | ✅ | 🚧 |
 | 5. Media | ✅ | 🚧 | 🚧 | 🚧 | ⬜ |
 | 6. Communities | ✅ | ⬜ | ⬜ | ⬜ | ⬜ |
 | 7. Discovery | ✅ | ⬜ | ⬜ | ⬜ | ⬜ |
@@ -82,11 +82,13 @@
 |---|---|:-:|
 | User | `internal/dao/ent/schema/user.go` | ✅ 基础字段 + followers/following 自关联 |
 | Post | `internal/dao/ent/schema/post.go` | ✅ 基础字段 + attachments/hashtags JSON + 软删除 + visibility + 计数 |
-| Comment |  | ⬜ |
+| Comment | `internal/dao/ent/schema/comment.go` | ✅ 软删除 + parent_id 楼中楼 |
+| PostLike / PostShare | `internal/dao/ent/schema/postlike.go` / `postshare.go` | ✅ 配对唯一索引 |
+| CommentLike | `internal/dao/ent/schema/commentlike.go` | ✅ 配对唯一索引 |
 | Community |  | ⬜ |
 | Membership (User↔Community) |  | ⬜ |
 | ConnectionRequest |  | ⬜ |
-| Bookmark |  | ⬜ |
+| Bookmark | `internal/dao/ent/schema/bookmark.go` | ✅ (user_id, post_id) 唯一 |
 | Block |  | ⬜ |
 | Photo (metadata only) |  | ⬜ |
 | Session |  | ⬜ |
@@ -197,24 +199,28 @@ DAO helper 入口：`internal/dao/media.go` (`MediaClient()` / `MediaBucketName(
 
 | Method | Path | 状态 |
 |---|---|:-:|
-| POST   | `/posts/{id}/like` | ⬜ |
-| DELETE | `/posts/{id}/like` | ⬜ |
-| GET    | `/posts/{id}/likes` | ⬜ |
-| POST   | `/posts/{id}/share` | ⬜ |
-| POST   | `/posts/{id}/bookmark` | ⬜ |
-| DELETE | `/posts/{id}/bookmark` | ⬜ |
-| GET    | `/users/me/bookmarks` | ⬜ |
+| POST   | `/posts/{id}/like` | ✅ 幂等，事务内更新计数；返回含 viewer 状态的最新帖子 |
+| DELETE | `/posts/{id}/like` | ✅ 幂等取消 |
+| GET    | `/posts/{id}/likes` | ✅ 游标分页，复用 UserSummary 形状 |
+| POST   | `/posts/{id}/share` | ✅ 计数每次累加；首次分享置 viewer.shared |
+| POST   | `/posts/{id}/bookmark` | ✅ 幂等收藏 |
+| DELETE | `/posts/{id}/bookmark` | ✅ 幂等取消 |
+| GET    | `/users/me/bookmarks` | ✅ 按收藏时间倒序游标分页，自动滤掉不可见帖 |
+
+实现：`internal/posts/interactions.go`；点赞/收藏在事务内维护关系行 + 计数器，feed 与详情响应中的 `viewer.{liked,bookmarked,shared}` 由批量查询填充。
 
 ### 4.2 评论
 
 | Method | Path | 状态 |
 |---|---|:-:|
-| GET    | `/posts/{id}/comments` | ⬜ |
-| POST   | `/posts/{id}/comments` | ⬜ |
-| PATCH  | `/comments/{id}` | ⬜ |
-| DELETE | `/comments/{id}` | ⬜ |
-| POST   | `/comments/{id}/like` | ⬜ |
-| DELETE | `/comments/{id}/like` | ⬜ |
+| GET    | `/posts/{id}/comments` | ✅ `parent_id` 过滤楼中楼；时间正序游标分页 |
+| POST   | `/posts/{id}/comments` | ✅ 支持回复；回复的回复扁平化到顶层父评论 |
+| PATCH  | `/comments/{id}` | ✅ 仅作者可编辑 |
+| DELETE | `/comments/{id}` | ✅ 仅作者；软删除 + comments_count 回减 |
+| POST   | `/comments/{id}/like` | ✅ 幂等 |
+| DELETE | `/comments/{id}/like` | ✅ 幂等 |
+
+实现：`internal/posts/comments.go`；评论列表按创建时间正序（阅读顺序），cursor 为最后一条评论 ID；对不可见帖子的评论操作统一 404。
 
 ---
 

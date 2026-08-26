@@ -14,7 +14,10 @@ import (
 	"github.com/kongken/ohome/internal/auth"
 	"github.com/kongken/ohome/internal/dao"
 	"github.com/kongken/ohome/internal/dao/ent"
+	entbookmark "github.com/kongken/ohome/internal/dao/ent/bookmark"
 	entpost "github.com/kongken/ohome/internal/dao/ent/post"
+	entpostlike "github.com/kongken/ohome/internal/dao/ent/postlike"
+	entpostshare "github.com/kongken/ohome/internal/dao/ent/postshare"
 	"github.com/kongken/ohome/internal/dao/ent/schema"
 	entuser "github.com/kongken/ohome/internal/dao/ent/user"
 	"github.com/kongken/ohome/internal/httpx"
@@ -46,11 +49,14 @@ func (h *Handler) Register(g *gin.RouterGroup) {
 	g.POST("/posts", auth.RequireAuth(h.issuer), h.createPost)
 	g.PATCH("/posts/:id", auth.RequireAuth(h.issuer), h.updatePost)
 	g.DELETE("/posts/:id", auth.RequireAuth(h.issuer), h.deletePost)
+	h.RegisterInteractions(g)
+	h.RegisterComments(g)
 }
 
 // RegisterOnUsers wires profile post routes under `/api/v1/users`.
 func (h *Handler) RegisterOnUsers(g *gin.RouterGroup) {
 	g.GET("/:username/posts", auth.OptionalAuth(h.issuer), h.userPosts)
+	h.RegisterBookmarks(g)
 }
 
 type attachment struct {
@@ -438,13 +444,18 @@ func (h *Handler) toResponses(ctx context.Context, posts []*ent.Post, viewerID s
 		authors[u.ID] = u
 	}
 
+	states, err := h.viewerStates(ctx, posts, viewerID)
+	if err != nil {
+		return nil, err
+	}
+
 	out := make([]postResponse, len(posts))
 	for i, p := range posts {
 		author, ok := authors[p.AuthorID]
 		if !ok {
 			return nil, fmt.Errorf("author %s not found", p.AuthorID)
 		}
-		out[i] = buildResponse(p, author, viewerID)
+		out[i] = buildResponse(p, author, states[p.ID])
 	}
 	return out, nil
 }
@@ -457,7 +468,7 @@ func (h *Handler) toResponse(ctx context.Context, p *ent.Post, viewerID string) 
 	return resps[0], nil
 }
 
-func buildResponse(p *ent.Post, u *ent.User, viewerID string) postResponse {
+func buildResponse(p *ent.Post, u *ent.User, state viewerState) postResponse {
 	name := u.DisplayName
 	if name == "" {
 		name = u.Username
@@ -482,7 +493,7 @@ func buildResponse(p *ent.Post, u *ent.User, viewerID string) postResponse {
 			Comments: p.CommentsCount,
 			Shares:   p.SharesCount,
 		},
-		Viewer: viewerState{},
+		Viewer: state,
 	}
 	if p.CommunityID != "" {
 		resp.Community = &communityRef{ID: p.CommunityID}
@@ -627,6 +638,75 @@ func isFollowing(ctx context.Context, followerID, targetID string) (bool, error)
 		QueryFollowing().
 		Where(entuser.IDEQ(targetID)).
 		Exist(ctx)
+}
+
+// loadVisiblePost fetches the :id post with visibility enforced; aborted
+// requests return ok=false.
+func (h *Handler) loadVisiblePost(c *gin.Context, ctx context.Context, viewerID string) (*ent.Post, bool) {
+	p, err := basePostQuery().
+		Where(entpost.IDEQ(c.Param("id"))).
+		Only(ctx)
+	if err != nil {
+		abortQuery(c, err, "post not found")
+		return nil, false
+	}
+	allowed, err := canView(ctx, p, viewerID)
+	if err != nil {
+		httpx.Abort(c, httpx.Internal("check visibility: "+err.Error()))
+		return nil, false
+	}
+	if !allowed {
+		httpx.Abort(c, httpx.NotFound("post not found"))
+		return nil, false
+	}
+	return p, true
+}
+
+// viewerStates batch-computes liked/bookmarked/shared flags for the viewer
+// across a page of posts (three queries regardless of page size).
+func (h *Handler) viewerStates(ctx context.Context, posts []*ent.Post, viewerID string) (map[string]viewerState, error) {
+	states := make(map[string]viewerState, len(posts))
+	if viewerID == "" || len(posts) == 0 {
+		return states, nil
+	}
+	ids := make([]string, len(posts))
+	for i, p := range posts {
+		ids[i] = p.ID
+	}
+
+	setFlags := func(flagIDs []string, set func(s *viewerState)) {
+		for _, id := range flagIDs {
+			s := states[id]
+			set(&s)
+			states[id] = s
+		}
+	}
+
+	liked, err := dao.Client().PostLike.Query().
+		Where(entpostlike.UserIDEQ(viewerID), entpostlike.PostIDIn(ids...)).
+		IDs(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("load liked posts: %w", err)
+	}
+	setFlags(liked, func(s *viewerState) { s.Liked = true })
+
+	bookmarked, err := dao.Client().Bookmark.Query().
+		Where(entbookmark.UserIDEQ(viewerID), entbookmark.PostIDIn(ids...)).
+		IDs(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("load bookmarked posts: %w", err)
+	}
+	setFlags(bookmarked, func(s *viewerState) { s.Bookmarked = true })
+
+	shared, err := dao.Client().PostShare.Query().
+		Where(entpostshare.UserIDEQ(viewerID), entpostshare.PostIDIn(ids...)).
+		IDs(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("load shared posts: %w", err)
+	}
+	setFlags(shared, func(s *viewerState) { s.Shared = true })
+
+	return states, nil
 }
 
 func applyCursor(ctx context.Context, query *ent.PostQuery, cursor string) ([]*ent.Post, error) {

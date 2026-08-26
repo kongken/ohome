@@ -6,8 +6,23 @@ import (
 	"entgo.io/ent/dialect/sql"
 )
 
+// Bookmark is the predicate function for bookmark builders.
+type Bookmark func(*sql.Selector)
+
+// Comment is the predicate function for comment builders.
+type Comment func(*sql.Selector)
+
+// CommentLike is the predicate function for commentlike builders.
+type CommentLike func(*sql.Selector)
+
 // Post is the predicate function for post builders.
 type Post func(*sql.Selector)
+
+// PostLike is the predicate function for postlike builders.
+type PostLike func(*sql.Selector)
+
+// PostShare is the predicate function for postshare builders.
+type PostShare func(*sql.Selector)
 
 // User is the predicate function for user builders.
 type User func(*sql.Selector)
