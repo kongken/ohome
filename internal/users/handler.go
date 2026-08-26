@@ -10,7 +10,6 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/kongken/ohome/internal/auth"
-	"github.com/kongken/ohome/internal/connections"
 	"github.com/kongken/ohome/internal/dao"
 	"github.com/kongken/ohome/internal/dao/ent"
 	entuser "github.com/kongken/ohome/internal/dao/ent/user"
@@ -311,7 +310,7 @@ func toProfile(ctx context.Context, u *ent.User, viewerID string) (*profileRespo
 		return nil, err
 	}
 
-	isFollowing, err := connections.IsFollowing(ctx, viewerID, u.ID)
+	isFollowing, err := IsFollowing(ctx, viewerID, u.ID)
 	if err != nil {
 		return nil, err
 	}

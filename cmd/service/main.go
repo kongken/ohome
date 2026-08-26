@@ -29,6 +29,7 @@ func main() {
 		InitFunc: []func() error{
 			initDAO,
 			runMigrations,
+			initMongoIndexes,
 		},
 	}
 
@@ -49,6 +50,18 @@ func runMigrations() error {
 	defer cancel()
 	if err := dao.Client().Schema.Create(ctx); err != nil {
 		slog.Error("ent schema migrate failed", "error", err)
+		return err
+	}
+	return nil
+}
+
+// initMongoIndexes creates the Mongo indexes (notifications list + read_at
+// TTL cleanup) after butterfly has connected the store.mongo.default client.
+func initMongoIndexes() error {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	if err := dao.EnsureNotificationIndexes(ctx); err != nil {
+		slog.Error("mongo index creation failed", "error", err)
 		return err
 	}
 	return nil

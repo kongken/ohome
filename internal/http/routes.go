@@ -11,6 +11,7 @@ import (
 	"github.com/kongken/ohome/internal/config"
 	"github.com/kongken/ohome/internal/connections"
 	"github.com/kongken/ohome/internal/media"
+	"github.com/kongken/ohome/internal/notifications"
 	"github.com/kongken/ohome/internal/posts"
 	"github.com/kongken/ohome/internal/users"
 )
@@ -52,6 +53,8 @@ func RegisterRoutes(r *gin.Engine, cfg *config.ServiceConfig) error {
 	communitiesGroup := v1.Group("/communities")
 	communities.NewHandler(issuer).Register(communitiesGroup)
 	postsHandler.RegisterOnCommunities(communitiesGroup)
+
+	notifications.NewHandler(issuer).Register(v1.Group("/notifications"))
 
 	// Future domain handlers (posts, communities, ...) registered here.
 	return nil
