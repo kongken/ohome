@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/kongken/ohome/internal/auth"
+	"github.com/kongken/ohome/internal/communities"
 	"github.com/kongken/ohome/internal/config"
 	"github.com/kongken/ohome/internal/connections"
 	"github.com/kongken/ohome/internal/media"
@@ -43,9 +44,14 @@ func RegisterRoutes(r *gin.Engine, cfg *config.ServiceConfig) error {
 	connections.NewHandler(issuer).RegisterOnUsers(usersGroup)
 	postsHandler := posts.NewHandler(issuer)
 	postsHandler.RegisterOnUsers(usersGroup)
+	communities.NewHandler(issuer).RegisterOnUsers(usersGroup)
 
 	media.NewHandler(issuer).Register(v1.Group("/media"))
 	postsHandler.Register(v1)
+
+	communitiesGroup := v1.Group("/communities")
+	communities.NewHandler(issuer).Register(communitiesGroup)
+	postsHandler.RegisterOnCommunities(communitiesGroup)
 
 	// Future domain handlers (posts, communities, ...) registered here.
 	return nil

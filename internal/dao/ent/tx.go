@@ -18,6 +18,10 @@ type Tx struct {
 	Comment *CommentClient
 	// CommentLike is the client for interacting with the CommentLike builders.
 	CommentLike *CommentLikeClient
+	// Community is the client for interacting with the Community builders.
+	Community *CommunityClient
+	// Membership is the client for interacting with the Membership builders.
+	Membership *MembershipClient
 	// Post is the client for interacting with the Post builders.
 	Post *PostClient
 	// PostLike is the client for interacting with the PostLike builders.
@@ -160,6 +164,8 @@ func (tx *Tx) init() {
 	tx.Bookmark = NewBookmarkClient(tx.config)
 	tx.Comment = NewCommentClient(tx.config)
 	tx.CommentLike = NewCommentLikeClient(tx.config)
+	tx.Community = NewCommunityClient(tx.config)
+	tx.Membership = NewMembershipClient(tx.config)
 	tx.Post = NewPostClient(tx.config)
 	tx.PostLike = NewPostLikeClient(tx.config)
 	tx.PostShare = NewPostShareClient(tx.config)

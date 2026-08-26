@@ -45,6 +45,30 @@ func (f CommentLikeFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value,
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.CommentLikeMutation", m)
 }
 
+// The CommunityFunc type is an adapter to allow the use of ordinary
+// function as Community mutator.
+type CommunityFunc func(context.Context, *ent.CommunityMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f CommunityFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.CommunityMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.CommunityMutation", m)
+}
+
+// The MembershipFunc type is an adapter to allow the use of ordinary
+// function as Membership mutator.
+type MembershipFunc func(context.Context, *ent.MembershipMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f MembershipFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.MembershipMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.MembershipMutation", m)
+}
+
 // The PostFunc type is an adapter to allow the use of ordinary
 // function as Post mutator.
 type PostFunc func(context.Context, *ent.PostMutation) (ent.Value, error)

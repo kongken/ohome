@@ -59,6 +59,52 @@ func (h *Handler) RegisterOnUsers(g *gin.RouterGroup) {
 	h.RegisterBookmarks(g)
 }
 
+// RegisterOnCommunities wires GET /api/v1/communities/:id/posts under the
+// communities group so post-feed logic stays in this package.
+func (h *Handler) RegisterOnCommunities(g *gin.RouterGroup) {
+	g.GET("/:id/posts", auth.OptionalAuth(h.issuer), h.communityPosts)
+}
+
+// communityPosts serves a community's post stream, mirroring the feed's
+// community scope (public posts plus the viewer's own).
+func (h *Handler) communityPosts(c *gin.Context) {
+	viewerID := auth.UserID(c)
+	page := httpx.ParsePage(c)
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+	defer cancel()
+
+	communityID := c.Param("id")
+	if _, err := dao.Client().Community.Get(ctx, communityID); err != nil {
+		if ent.IsNotFound(err) {
+			httpx.Abort(c, httpx.NotFound("community not found"))
+		} else {
+			httpx.Abort(c, httpx.Internal("load community: "+err.Error()))
+		}
+		return
+	}
+
+	query := basePostQuery().
+		Where(entpost.CommunityIDEQ(communityID)).
+		Order(entpost.ByCreatedAt(sql.OrderDesc()), entpost.ByID(sql.OrderDesc())).
+		Limit(page.Limit + 1)
+	if viewerID != "" {
+		query = query.Where(entpost.Or(
+			entpost.VisibilityEQ(visibilityPublic),
+			entpost.AuthorIDEQ(viewerID),
+		))
+	} else {
+		query = query.Where(entpost.VisibilityEQ(visibilityPublic))
+	}
+
+	posts, err := applyCursor(ctx, query, page.Cursor)
+	if err != nil {
+		httpx.Abort(c, httpx.BadQuery("invalid cursor"))
+		return
+	}
+	h.writePostList(c, ctx, posts, viewerID, page.Limit)
+}
+
 type attachment struct {
 	Type    string `json:"type,omitempty"`
 	MediaID string `json:"media_id,omitempty"`

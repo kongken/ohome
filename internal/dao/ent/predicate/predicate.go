@@ -15,6 +15,12 @@ type Comment func(*sql.Selector)
 // CommentLike is the predicate function for commentlike builders.
 type CommentLike func(*sql.Selector)
 
+// Community is the predicate function for community builders.
+type Community func(*sql.Selector)
+
+// Membership is the predicate function for membership builders.
+type Membership func(*sql.Selector)
+
 // Post is the predicate function for post builders.
 type Post func(*sql.Selector)
 
