@@ -103,6 +103,71 @@ var (
 			},
 		},
 	}
+	// CommunitiesColumns holds the columns for the "communities" table.
+	CommunitiesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Unique: true, Size: 64},
+		{Name: "name", Type: field.TypeString, Size: 128},
+		{Name: "description", Type: field.TypeString, Nullable: true, Size: 2147483647},
+		{Name: "icon_url", Type: field.TypeString, Nullable: true},
+		{Name: "cover_url", Type: field.TypeString, Nullable: true},
+		{Name: "category", Type: field.TypeString, Nullable: true, Size: 64},
+		{Name: "members_count", Type: field.TypeInt, Default: 0},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+	}
+	// CommunitiesTable holds the schema information for the "communities" table.
+	CommunitiesTable = &schema.Table{
+		Name:       "communities",
+		Columns:    CommunitiesColumns,
+		PrimaryKey: []*schema.Column{CommunitiesColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "community_category",
+				Unique:  false,
+				Columns: []*schema.Column{CommunitiesColumns[5]},
+			},
+			{
+				Name:    "community_members_count",
+				Unique:  false,
+				Columns: []*schema.Column{CommunitiesColumns[6]},
+			},
+			{
+				Name:    "community_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{CommunitiesColumns[7]},
+			},
+		},
+	}
+	// MembershipsColumns holds the columns for the "memberships" table.
+	MembershipsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Unique: true, Size: 40},
+		{Name: "user_id", Type: field.TypeString, Size: 40},
+		{Name: "community_id", Type: field.TypeString, Size: 64},
+		{Name: "created_at", Type: field.TypeTime},
+	}
+	// MembershipsTable holds the schema information for the "memberships" table.
+	MembershipsTable = &schema.Table{
+		Name:       "memberships",
+		Columns:    MembershipsColumns,
+		PrimaryKey: []*schema.Column{MembershipsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "membership_user_id_community_id",
+				Unique:  true,
+				Columns: []*schema.Column{MembershipsColumns[1], MembershipsColumns[2]},
+			},
+			{
+				Name:    "membership_community_id_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{MembershipsColumns[2], MembershipsColumns[3]},
+			},
+			{
+				Name:    "membership_user_id_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{MembershipsColumns[1], MembershipsColumns[3]},
+			},
+		},
+	}
 	// PostsColumns holds the columns for the "posts" table.
 	PostsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Unique: true, Size: 40},
@@ -263,6 +328,8 @@ var (
 		BookmarksTable,
 		CommentsTable,
 		CommentLikesTable,
+		CommunitiesTable,
+		MembershipsTable,
 		PostsTable,
 		PostLikesTable,
 		PostSharesTable,

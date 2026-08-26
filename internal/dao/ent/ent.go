@@ -15,6 +15,8 @@ import (
 	"github.com/kongken/ohome/internal/dao/ent/bookmark"
 	"github.com/kongken/ohome/internal/dao/ent/comment"
 	"github.com/kongken/ohome/internal/dao/ent/commentlike"
+	"github.com/kongken/ohome/internal/dao/ent/community"
+	"github.com/kongken/ohome/internal/dao/ent/membership"
 	"github.com/kongken/ohome/internal/dao/ent/post"
 	"github.com/kongken/ohome/internal/dao/ent/postlike"
 	"github.com/kongken/ohome/internal/dao/ent/postshare"
@@ -82,6 +84,8 @@ func checkColumn(t, c string) error {
 			bookmark.Table:    bookmark.ValidColumn,
 			comment.Table:     comment.ValidColumn,
 			commentlike.Table: commentlike.ValidColumn,
+			community.Table:   community.ValidColumn,
+			membership.Table:  membership.ValidColumn,
 			post.Table:        post.ValidColumn,
 			postlike.Table:    postlike.ValidColumn,
 			postshare.Table:   postshare.ValidColumn,

@@ -8,6 +8,8 @@ import (
 	"github.com/kongken/ohome/internal/dao/ent/bookmark"
 	"github.com/kongken/ohome/internal/dao/ent/comment"
 	"github.com/kongken/ohome/internal/dao/ent/commentlike"
+	"github.com/kongken/ohome/internal/dao/ent/community"
+	"github.com/kongken/ohome/internal/dao/ent/membership"
 	"github.com/kongken/ohome/internal/dao/ent/post"
 	"github.com/kongken/ohome/internal/dao/ent/postlike"
 	"github.com/kongken/ohome/internal/dao/ent/postshare"
@@ -89,6 +91,54 @@ func init() {
 	commentlikeDescID := commentlikeFields[0].Descriptor()
 	// commentlike.IDValidator is a validator for the "id" field. It is called by the builders before save.
 	commentlike.IDValidator = commentlikeDescID.Validators[0].(func(string) error)
+	communityFields := schema.Community{}.Fields()
+	_ = communityFields
+	// communityDescName is the schema descriptor for name field.
+	communityDescName := communityFields[1].Descriptor()
+	// community.NameValidator is a validator for the "name" field. It is called by the builders before save.
+	community.NameValidator = communityDescName.Validators[0].(func(string) error)
+	// communityDescCategory is the schema descriptor for category field.
+	communityDescCategory := communityFields[5].Descriptor()
+	// community.CategoryValidator is a validator for the "category" field. It is called by the builders before save.
+	community.CategoryValidator = communityDescCategory.Validators[0].(func(string) error)
+	// communityDescMembersCount is the schema descriptor for members_count field.
+	communityDescMembersCount := communityFields[6].Descriptor()
+	// community.DefaultMembersCount holds the default value on creation for the members_count field.
+	community.DefaultMembersCount = communityDescMembersCount.Default.(int)
+	// community.MembersCountValidator is a validator for the "members_count" field. It is called by the builders before save.
+	community.MembersCountValidator = communityDescMembersCount.Validators[0].(func(int) error)
+	// communityDescCreatedAt is the schema descriptor for created_at field.
+	communityDescCreatedAt := communityFields[7].Descriptor()
+	// community.DefaultCreatedAt holds the default value on creation for the created_at field.
+	community.DefaultCreatedAt = communityDescCreatedAt.Default.(func() time.Time)
+	// communityDescUpdatedAt is the schema descriptor for updated_at field.
+	communityDescUpdatedAt := communityFields[8].Descriptor()
+	// community.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	community.DefaultUpdatedAt = communityDescUpdatedAt.Default.(func() time.Time)
+	// community.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	community.UpdateDefaultUpdatedAt = communityDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// communityDescID is the schema descriptor for id field.
+	communityDescID := communityFields[0].Descriptor()
+	// community.IDValidator is a validator for the "id" field. It is called by the builders before save.
+	community.IDValidator = communityDescID.Validators[0].(func(string) error)
+	membershipFields := schema.Membership{}.Fields()
+	_ = membershipFields
+	// membershipDescUserID is the schema descriptor for user_id field.
+	membershipDescUserID := membershipFields[1].Descriptor()
+	// membership.UserIDValidator is a validator for the "user_id" field. It is called by the builders before save.
+	membership.UserIDValidator = membershipDescUserID.Validators[0].(func(string) error)
+	// membershipDescCommunityID is the schema descriptor for community_id field.
+	membershipDescCommunityID := membershipFields[2].Descriptor()
+	// membership.CommunityIDValidator is a validator for the "community_id" field. It is called by the builders before save.
+	membership.CommunityIDValidator = membershipDescCommunityID.Validators[0].(func(string) error)
+	// membershipDescCreatedAt is the schema descriptor for created_at field.
+	membershipDescCreatedAt := membershipFields[3].Descriptor()
+	// membership.DefaultCreatedAt holds the default value on creation for the created_at field.
+	membership.DefaultCreatedAt = membershipDescCreatedAt.Default.(func() time.Time)
+	// membershipDescID is the schema descriptor for id field.
+	membershipDescID := membershipFields[0].Descriptor()
+	// membership.IDValidator is a validator for the "id" field. It is called by the builders before save.
+	membership.IDValidator = membershipDescID.Validators[0].(func(string) error)
 	postFields := schema.Post{}.Fields()
 	_ = postFields
 	// postDescAuthorID is the schema descriptor for author_id field.

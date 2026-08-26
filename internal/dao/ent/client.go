@@ -18,6 +18,8 @@ import (
 	"github.com/kongken/ohome/internal/dao/ent/bookmark"
 	"github.com/kongken/ohome/internal/dao/ent/comment"
 	"github.com/kongken/ohome/internal/dao/ent/commentlike"
+	"github.com/kongken/ohome/internal/dao/ent/community"
+	"github.com/kongken/ohome/internal/dao/ent/membership"
 	"github.com/kongken/ohome/internal/dao/ent/post"
 	"github.com/kongken/ohome/internal/dao/ent/postlike"
 	"github.com/kongken/ohome/internal/dao/ent/postshare"
@@ -35,6 +37,10 @@ type Client struct {
 	Comment *CommentClient
 	// CommentLike is the client for interacting with the CommentLike builders.
 	CommentLike *CommentLikeClient
+	// Community is the client for interacting with the Community builders.
+	Community *CommunityClient
+	// Membership is the client for interacting with the Membership builders.
+	Membership *MembershipClient
 	// Post is the client for interacting with the Post builders.
 	Post *PostClient
 	// PostLike is the client for interacting with the PostLike builders.
@@ -57,6 +63,8 @@ func (c *Client) init() {
 	c.Bookmark = NewBookmarkClient(c.config)
 	c.Comment = NewCommentClient(c.config)
 	c.CommentLike = NewCommentLikeClient(c.config)
+	c.Community = NewCommunityClient(c.config)
+	c.Membership = NewMembershipClient(c.config)
 	c.Post = NewPostClient(c.config)
 	c.PostLike = NewPostLikeClient(c.config)
 	c.PostShare = NewPostShareClient(c.config)
@@ -156,6 +164,8 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		Bookmark:    NewBookmarkClient(cfg),
 		Comment:     NewCommentClient(cfg),
 		CommentLike: NewCommentLikeClient(cfg),
+		Community:   NewCommunityClient(cfg),
+		Membership:  NewMembershipClient(cfg),
 		Post:        NewPostClient(cfg),
 		PostLike:    NewPostLikeClient(cfg),
 		PostShare:   NewPostShareClient(cfg),
@@ -182,6 +192,8 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		Bookmark:    NewBookmarkClient(cfg),
 		Comment:     NewCommentClient(cfg),
 		CommentLike: NewCommentLikeClient(cfg),
+		Community:   NewCommunityClient(cfg),
+		Membership:  NewMembershipClient(cfg),
 		Post:        NewPostClient(cfg),
 		PostLike:    NewPostLikeClient(cfg),
 		PostShare:   NewPostShareClient(cfg),
@@ -215,7 +227,8 @@ func (c *Client) Close() error {
 // In order to add hooks to a specific client, call: `client.Node.Use(...)`.
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
-		c.Bookmark, c.Comment, c.CommentLike, c.Post, c.PostLike, c.PostShare, c.User,
+		c.Bookmark, c.Comment, c.CommentLike, c.Community, c.Membership, c.Post,
+		c.PostLike, c.PostShare, c.User,
 	} {
 		n.Use(hooks...)
 	}
@@ -225,7 +238,8 @@ func (c *Client) Use(hooks ...Hook) {
 // In order to add interceptors to a specific client, call: `client.Node.Intercept(...)`.
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
-		c.Bookmark, c.Comment, c.CommentLike, c.Post, c.PostLike, c.PostShare, c.User,
+		c.Bookmark, c.Comment, c.CommentLike, c.Community, c.Membership, c.Post,
+		c.PostLike, c.PostShare, c.User,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -240,6 +254,10 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.Comment.mutate(ctx, m)
 	case *CommentLikeMutation:
 		return c.CommentLike.mutate(ctx, m)
+	case *CommunityMutation:
+		return c.Community.mutate(ctx, m)
+	case *MembershipMutation:
+		return c.Membership.mutate(ctx, m)
 	case *PostMutation:
 		return c.Post.mutate(ctx, m)
 	case *PostLikeMutation:
@@ -649,6 +667,272 @@ func (c *CommentLikeClient) mutate(ctx context.Context, m *CommentLikeMutation) 
 		return (&CommentLikeDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown CommentLike mutation op: %q", m.Op())
+	}
+}
+
+// CommunityClient is a client for the Community schema.
+type CommunityClient struct {
+	config
+}
+
+// NewCommunityClient returns a client for the Community from the given config.
+func NewCommunityClient(c config) *CommunityClient {
+	return &CommunityClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `community.Hooks(f(g(h())))`.
+func (c *CommunityClient) Use(hooks ...Hook) {
+	c.hooks.Community = append(c.hooks.Community, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `community.Intercept(f(g(h())))`.
+func (c *CommunityClient) Intercept(interceptors ...Interceptor) {
+	c.inters.Community = append(c.inters.Community, interceptors...)
+}
+
+// Create returns a builder for creating a Community entity.
+func (c *CommunityClient) Create() *CommunityCreate {
+	mutation := newCommunityMutation(c.config, OpCreate)
+	return &CommunityCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of Community entities.
+func (c *CommunityClient) CreateBulk(builders ...*CommunityCreate) *CommunityCreateBulk {
+	return &CommunityCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *CommunityClient) MapCreateBulk(slice any, setFunc func(*CommunityCreate, int)) *CommunityCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &CommunityCreateBulk{err: fmt.Errorf("calling to CommunityClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*CommunityCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &CommunityCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for Community.
+func (c *CommunityClient) Update() *CommunityUpdate {
+	mutation := newCommunityMutation(c.config, OpUpdate)
+	return &CommunityUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *CommunityClient) UpdateOne(_m *Community) *CommunityUpdateOne {
+	mutation := newCommunityMutation(c.config, OpUpdateOne, withCommunity(_m))
+	return &CommunityUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *CommunityClient) UpdateOneID(id string) *CommunityUpdateOne {
+	mutation := newCommunityMutation(c.config, OpUpdateOne, withCommunityID(id))
+	return &CommunityUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for Community.
+func (c *CommunityClient) Delete() *CommunityDelete {
+	mutation := newCommunityMutation(c.config, OpDelete)
+	return &CommunityDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *CommunityClient) DeleteOne(_m *Community) *CommunityDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *CommunityClient) DeleteOneID(id string) *CommunityDeleteOne {
+	builder := c.Delete().Where(community.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &CommunityDeleteOne{builder}
+}
+
+// Query returns a query builder for Community.
+func (c *CommunityClient) Query() *CommunityQuery {
+	return &CommunityQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeCommunity},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a Community entity by its id.
+func (c *CommunityClient) Get(ctx context.Context, id string) (*Community, error) {
+	return c.Query().Where(community.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *CommunityClient) GetX(ctx context.Context, id string) *Community {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *CommunityClient) Hooks() []Hook {
+	return c.hooks.Community
+}
+
+// Interceptors returns the client interceptors.
+func (c *CommunityClient) Interceptors() []Interceptor {
+	return c.inters.Community
+}
+
+func (c *CommunityClient) mutate(ctx context.Context, m *CommunityMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&CommunityCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&CommunityUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&CommunityUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&CommunityDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown Community mutation op: %q", m.Op())
+	}
+}
+
+// MembershipClient is a client for the Membership schema.
+type MembershipClient struct {
+	config
+}
+
+// NewMembershipClient returns a client for the Membership from the given config.
+func NewMembershipClient(c config) *MembershipClient {
+	return &MembershipClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `membership.Hooks(f(g(h())))`.
+func (c *MembershipClient) Use(hooks ...Hook) {
+	c.hooks.Membership = append(c.hooks.Membership, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `membership.Intercept(f(g(h())))`.
+func (c *MembershipClient) Intercept(interceptors ...Interceptor) {
+	c.inters.Membership = append(c.inters.Membership, interceptors...)
+}
+
+// Create returns a builder for creating a Membership entity.
+func (c *MembershipClient) Create() *MembershipCreate {
+	mutation := newMembershipMutation(c.config, OpCreate)
+	return &MembershipCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of Membership entities.
+func (c *MembershipClient) CreateBulk(builders ...*MembershipCreate) *MembershipCreateBulk {
+	return &MembershipCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *MembershipClient) MapCreateBulk(slice any, setFunc func(*MembershipCreate, int)) *MembershipCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &MembershipCreateBulk{err: fmt.Errorf("calling to MembershipClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*MembershipCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &MembershipCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for Membership.
+func (c *MembershipClient) Update() *MembershipUpdate {
+	mutation := newMembershipMutation(c.config, OpUpdate)
+	return &MembershipUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *MembershipClient) UpdateOne(_m *Membership) *MembershipUpdateOne {
+	mutation := newMembershipMutation(c.config, OpUpdateOne, withMembership(_m))
+	return &MembershipUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *MembershipClient) UpdateOneID(id string) *MembershipUpdateOne {
+	mutation := newMembershipMutation(c.config, OpUpdateOne, withMembershipID(id))
+	return &MembershipUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for Membership.
+func (c *MembershipClient) Delete() *MembershipDelete {
+	mutation := newMembershipMutation(c.config, OpDelete)
+	return &MembershipDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *MembershipClient) DeleteOne(_m *Membership) *MembershipDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *MembershipClient) DeleteOneID(id string) *MembershipDeleteOne {
+	builder := c.Delete().Where(membership.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &MembershipDeleteOne{builder}
+}
+
+// Query returns a query builder for Membership.
+func (c *MembershipClient) Query() *MembershipQuery {
+	return &MembershipQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeMembership},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a Membership entity by its id.
+func (c *MembershipClient) Get(ctx context.Context, id string) (*Membership, error) {
+	return c.Query().Where(membership.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *MembershipClient) GetX(ctx context.Context, id string) *Membership {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *MembershipClient) Hooks() []Hook {
+	return c.hooks.Membership
+}
+
+// Interceptors returns the client interceptors.
+func (c *MembershipClient) Interceptors() []Interceptor {
+	return c.inters.Membership
+}
+
+func (c *MembershipClient) mutate(ctx context.Context, m *MembershipMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&MembershipCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&MembershipUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&MembershipUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&MembershipDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown Membership mutation op: %q", m.Op())
 	}
 }
 
@@ -1219,10 +1503,11 @@ func (c *UserClient) mutate(ctx context.Context, m *UserMutation) (Value, error)
 // hooks and interceptors per client, for fast access.
 type (
 	hooks struct {
-		Bookmark, Comment, CommentLike, Post, PostLike, PostShare, User []ent.Hook
+		Bookmark, Comment, CommentLike, Community, Membership, Post, PostLike,
+		PostShare, User []ent.Hook
 	}
 	inters struct {
-		Bookmark, Comment, CommentLike, Post, PostLike, PostShare,
-		User []ent.Interceptor
+		Bookmark, Comment, CommentLike, Community, Membership, Post, PostLike,
+		PostShare, User []ent.Interceptor
 	}
 )

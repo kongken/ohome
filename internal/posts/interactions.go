@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"strings"
 	"time"
 
 	"entgo.io/ent/dialect/sql"
@@ -20,7 +19,6 @@ import (
 	entpostlike "github.com/kongken/ohome/internal/dao/ent/postlike"
 	entpostshare "github.com/kongken/ohome/internal/dao/ent/postshare"
 	"github.com/kongken/ohome/internal/dao/ent/predicate"
-	entuser "github.com/kongken/ohome/internal/dao/ent/user"
 	"github.com/kongken/ohome/internal/httpx"
 )
 
@@ -125,71 +123,24 @@ func (h *Handler) runPostMutation(c *gin.Context, ctx context.Context, p *ent.Po
 	c.JSON(http.StatusOK, resp)
 }
 
-const (
-	keysetColCreatedAt = "created_at"
-	keysetColID        = "id"
-)
-
-// keysetPredicate builds the shared (created_at, id) comparison predicate:
-// rows strictly older than the cursor position for desc order, strictly
-// newer for asc. Single-table queries only (columns are unqualified).
-func keysetPredicate(asc bool, createdAt time.Time, id string) *sql.Predicate {
-	before := sql.LT(keysetColCreatedAt, createdAt)
-	idTie := sql.LT(keysetColID, id)
-	if asc {
-		before = sql.GT(keysetColCreatedAt, createdAt)
-		idTie = sql.GT(keysetColID, id)
-	}
-	return sql.Or(before, sql.And(sql.EQ(keysetColCreatedAt, createdAt), idTie))
-}
-
-// Per-entity adapters bridging the shared predicate to typed queries.
-
 func postKeyset(asc bool, row *ent.Post) predicate.Post {
-	return func(s *sql.Selector) { s.Where(keysetPredicate(asc, row.CreatedAt, row.ID)) }
+	return func(s *sql.Selector) { s.Where(dao.Keyset(asc, row.CreatedAt, row.ID)) }
 }
 
 func postLikeKeyset(asc bool, row *ent.PostLike) predicate.PostLike {
-	return func(s *sql.Selector) { s.Where(keysetPredicate(asc, row.CreatedAt, row.ID)) }
+	return func(s *sql.Selector) { s.Where(dao.Keyset(asc, row.CreatedAt, row.ID)) }
 }
 
 func bookmarkKeyset(asc bool, row *ent.Bookmark) predicate.Bookmark {
-	return func(s *sql.Selector) { s.Where(keysetPredicate(asc, row.CreatedAt, row.ID)) }
+	return func(s *sql.Selector) { s.Where(dao.Keyset(asc, row.CreatedAt, row.ID)) }
 }
 
 func commentKeyset(asc bool, row *ent.Comment) predicate.Comment {
-	return func(s *sql.Selector) { s.Where(keysetPredicate(asc, row.CreatedAt, row.ID)) }
+	return func(s *sql.Selector) { s.Where(dao.Keyset(asc, row.CreatedAt, row.ID)) }
 }
 
-// insertOnce runs create, treating a unique-constraint failure as success
-// (false): a concurrent duplicate request raced past the existence check.
-// Returns whether this call newly inserted the row.
-func insertOnce(create func() error) (bool, error) {
-	err := create()
-	switch {
-	case err == nil:
-		return true, nil
-	case isUniqueViolation(err):
-		return false, nil
-	default:
-		return false, err
-	}
-}
-
-// isUniqueViolation covers ent's typed wrapper plus raw driver strings so it
-// also works for errors that skipped the ent wrapping layer.
-func isUniqueViolation(err error) bool {
-	if err == nil {
-		return false
-	}
-	if ent.IsConstraintError(err) {
-		return true
-	}
-	msg := err.Error()
-	return strings.Contains(msg, "violates unique constraint") || // Postgres
-		strings.Contains(msg, "UNIQUE constraint failed") || // SQLite
-		strings.Contains(msg, "Error 1062") // MySQL
-}
+// insertOnce runs create via dao.InsertOnce; see that for semantics.
+var insertOnce = dao.InsertOnce
 
 func likePostTx(ctx context.Context, tx *ent.Tx, postID, userID string) error {
 	exists, err := tx.PostLike.Query().
@@ -242,7 +193,7 @@ func sharePostTx(ctx context.Context, tx *ent.Tx, postID, userID string) error {
 			SetID(uuid.NewString()).
 			SetPostID(postID).
 			SetUserID(userID).
-			Save(ctx); err != nil && !isUniqueViolation(err) {
+			Save(ctx); err != nil && !dao.IsUniqueViolation(err) {
 			return fmt.Errorf("create share: %w", err)
 		}
 	}
@@ -421,48 +372,8 @@ func applyBookmarkCursor(ctx context.Context, query *ent.BookmarkQuery, cursor s
 // userSummariesByIDs builds UserSummary values in the given ID order,
 // batch-loading users and follow status in two queries. Users that vanished
 // since liking are silently skipped (consistent with comment lists).
+// userSummariesByIDs delegates to connections.SummariesByIDs so the batch
+// user + is_following loading logic lives in one place.
 func userSummariesByIDs(ctx context.Context, ids []string, viewerID string) ([]connections.UserSummary, error) {
-	out := make([]connections.UserSummary, 0, len(ids))
-	if len(ids) == 0 {
-		return out, nil
-	}
-
-	users, err := dao.Client().User.Query().Where(entuser.IDIn(ids...)).All(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("load users: %w", err)
-	}
-	byID := make(map[string]*ent.User, len(users))
-	for _, u := range users {
-		byID[u.ID] = u
-	}
-
-	following := map[string]bool{}
-	if viewerID != "" {
-		fids, err := dao.Client().User.Query().
-			Where(entuser.IDEQ(viewerID)).
-			QueryFollowing().
-			Where(entuser.IDIn(ids...)).
-			IDs(ctx)
-		if err != nil {
-			return nil, fmt.Errorf("batch is_following check: %w", err)
-		}
-		for _, id := range fids {
-			following[id] = true
-		}
-	}
-
-	for _, id := range ids {
-		u, ok := byID[id]
-		if !ok {
-			continue
-		}
-		out = append(out, connections.UserSummary{
-			ID:          u.ID,
-			Username:    u.Username,
-			DisplayName: u.DisplayName,
-			AvatarURL:   u.AvatarURL,
-			IsFollowing: following[u.ID],
-		})
-	}
-	return out, nil
+	return connections.SummariesByIDs(ctx, ids, viewerID)
 }

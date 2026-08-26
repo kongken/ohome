@@ -9,6 +9,7 @@ import (
 	"entgo.io/ent/dialect"
 	"entgo.io/ent/dialect/sql"
 
+	"github.com/kongken/ohome/internal/dao"
 	"github.com/kongken/ohome/internal/dao/ent"
 )
 
@@ -118,16 +119,16 @@ func TestBuildResponseAppliesViewerState(t *testing.T) {
 }
 
 func TestIsUniqueViolationMatchesDriverStrings(t *testing.T) {
-	if !isUniqueViolation(errors.New("pq: duplicate key value violates unique constraint \"post_likes_post_id_user_id_key\"")) {
+	if !dao.IsUniqueViolation(errors.New("pq: duplicate key value violates unique constraint \"post_likes_post_id_user_id_key\"")) {
 		t.Fatal("unique violation not detected from Postgres message")
 	}
-	if !isUniqueViolation(errors.New("UNIQUE constraint failed: post_likes.post_id")) {
+	if !dao.IsUniqueViolation(errors.New("UNIQUE constraint failed: post_likes.post_id")) {
 		t.Fatal("unique violation not detected from SQLite message")
 	}
-	if isUniqueViolation(errors.New("connection reset")) {
+	if dao.IsUniqueViolation(errors.New("connection reset")) {
 		t.Fatal("non-constraint error misclassified as unique violation")
 	}
-	if isUniqueViolation(nil) {
+	if dao.IsUniqueViolation(nil) {
 		t.Fatal("nil error misclassified as unique violation")
 	}
 }
@@ -158,7 +159,7 @@ func TestKeysetPredicateDirection(t *testing.T) {
 
 	queryFor := func(asc bool) (string, []any) {
 		sb := sql.Dialect(dialect.Postgres).Select().From(sql.Table("rows"))
-		return sb.Where(keysetPredicate(asc, ts, "row_9")).Query()
+		return sb.Where(dao.Keyset(asc, ts, "row_9")).Query()
 	}
 
 	descQ, descArgs := queryFor(false)

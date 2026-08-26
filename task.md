@@ -4,7 +4,7 @@
 
 **Legend**: ✅ 完成 · 🚧 进行中 · ⬜ 待开始
 
-**最后更新**: 2026-08-25
+**最后更新**: 2026-08-26
 
 ---
 
@@ -19,7 +19,7 @@
 | 4.1 互动 (Like/Bookmark/Share) | ✅ | ✅ | ✅ | ✅ | 🚧 |
 | 4.2 Comments | ✅ | ✅ | ✅ | ✅ | 🚧 |
 | 5. Media | ✅ | 🚧 | 🚧 | 🚧 | ⬜ |
-| 6. Communities | ✅ | ⬜ | ⬜ | ⬜ | ⬜ |
+| 6. Communities | ✅ | ✅ | ✅ | ✅ | 🚧 |
 | 7. Discovery | ✅ | ⬜ | ⬜ | ⬜ | ⬜ |
 | 7.1 Search | ✅ | ⬜ | ⬜ | ⬜ | ⬜ |
 | 8. Notifications | ✅ | ⬜ | ⬜ | ⬜ | ⬜ |
@@ -85,8 +85,8 @@
 | Comment | `internal/dao/ent/schema/comment.go` | ✅ 软删除 + parent_id 楼中楼 |
 | PostLike / PostShare | `internal/dao/ent/schema/postlike.go` / `postshare.go` | ✅ 配对唯一索引 |
 | CommentLike | `internal/dao/ent/schema/commentlike.go` | ✅ 配对唯一索引 |
-| Community |  | ⬜ |
-| Membership (User↔Community) |  | ⬜ |
+| Community | `internal/dao/ent/schema/community.go` | ✅ members_count 计数器 + category/members_count 索引 |
+| Membership (User↔Community) | `internal/dao/ent/schema/membership.go` | ✅ (user_id, community_id) 唯一 |
 | ConnectionRequest |  | ⬜ |
 | Bookmark | `internal/dao/ent/schema/bookmark.go` | ✅ (user_id, post_id) 唯一 |
 | Block |  | ⬜ |
@@ -246,13 +246,15 @@ DAO helper 入口：`internal/dao/media.go` (`MediaClient()` / `MediaBucketName(
 
 | Method | Path | 状态 |
 |---|---|:-:|
-| GET    | `/communities` | ⬜ |
-| GET    | `/communities/{id}` | ⬜ |
-| GET    | `/communities/{id}/posts` | ⬜ |
-| POST   | `/communities/{id}/join` | ⬜ |
-| DELETE | `/communities/{id}/join` | ⬜ |
-| GET    | `/communities/{id}/members` | ⬜ |
-| GET    | `/users/me/communities` | ⬜ |
+| GET    | `/communities` | ✅ `q` 模糊搜索（name/description）、`category` 过滤、`sort=members\|trending`（trending 暂同 members 排序，待活动计数） |
+| GET    | `/communities/{id}` | ✅ 含 viewer 的 is_member |
+| GET    | `/communities/{id}/posts` | ✅ 复用 posts 包 feed 基建；公开帖 + 自己的帖子 |
+| POST   | `/communities/{id}/join` | ✅ 幂等，事务内维护 membership 行 + members_count |
+| DELETE | `/communities/{id}/join` | ✅ 幂等退出 |
+| GET    | `/communities/{id}/members` | ✅ 游标分页，复用 connections.SummariesByIDs |
+| GET    | `/users/me/communities` | ✅ 按加入时间倒序游标分页 |
+
+实现：`internal/communities/handler.go`；社区帖子流在 `internal/posts/handler.go`（RegisterOnCommunities）。社区暂无创建接口（api.md 未定义），数据由种子/管理侧写入。路由树冲突由 `internal/http/routes_smoke_test.go` 守护。
 
 ---
 
