@@ -11,7 +11,6 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/kongken/ohome/internal/auth"
-	"github.com/kongken/ohome/internal/connections"
 	"github.com/kongken/ohome/internal/dao"
 	"github.com/kongken/ohome/internal/dao/ent"
 	entbookmark "github.com/kongken/ohome/internal/dao/ent/bookmark"
@@ -20,6 +19,8 @@ import (
 	entpostshare "github.com/kongken/ohome/internal/dao/ent/postshare"
 	"github.com/kongken/ohome/internal/dao/ent/predicate"
 	"github.com/kongken/ohome/internal/httpx"
+	"github.com/kongken/ohome/internal/notifications"
+	"github.com/kongken/ohome/internal/users"
 )
 
 // RegisterInteractions wires like / share / bookmark routes onto `/api/v1`.
@@ -42,6 +43,11 @@ func (h *Handler) likePost(c *gin.Context) {
 	uid := auth.UserID(c)
 	h.mutateVisiblePost(c, func(ctx context.Context, tx *ent.Tx, p *ent.Post) error {
 		return likePostTx(ctx, tx, p.ID, uid)
+	}, func(ctx context.Context, p *ent.Post) {
+		notifications.TryNotify(ctx, notifications.Input{
+			UserID: p.AuthorID, Type: notifications.TypeLike,
+			ActorID: uid, PostID: p.ID,
+		})
 	})
 }
 
@@ -49,13 +55,18 @@ func (h *Handler) unlikePost(c *gin.Context) {
 	uid := auth.UserID(c)
 	h.mutateVisiblePost(c, func(ctx context.Context, tx *ent.Tx, p *ent.Post) error {
 		return unlikePostTx(ctx, tx, p.ID, uid)
-	})
+	}, nil)
 }
 
 func (h *Handler) sharePost(c *gin.Context) {
 	uid := auth.UserID(c)
 	h.mutateVisiblePost(c, func(ctx context.Context, tx *ent.Tx, p *ent.Post) error {
 		return sharePostTx(ctx, tx, p.ID, uid)
+	}, func(ctx context.Context, p *ent.Post) {
+		notifications.TryNotify(ctx, notifications.Input{
+			UserID: p.AuthorID, Type: notifications.TypePostShare,
+			ActorID: uid, PostID: p.ID,
+		})
 	})
 }
 
@@ -63,21 +74,22 @@ func (h *Handler) bookmarkPost(c *gin.Context) {
 	uid := auth.UserID(c)
 	h.mutateVisiblePost(c, func(ctx context.Context, tx *ent.Tx, p *ent.Post) error {
 		return bookmarkPostTx(ctx, tx, p.ID, uid)
-	})
+	}, nil)
 }
 
 func (h *Handler) unbookmarkPost(c *gin.Context) {
 	uid := auth.UserID(c)
 	h.mutateVisiblePost(c, func(ctx context.Context, tx *ent.Tx, p *ent.Post) error {
 		return unbookmarkPostTx(ctx, tx, p.ID, uid)
-	})
+	}, nil)
 }
 
 // mutateVisiblePost is the shared scaffold for post-state mutations:
 // authenticate, load the :id post with visibility enforced, run mutate in a
-// transaction, commit, and respond with the refreshed post response.
-// Aborts with 401 when unauthenticated; never invokes mutate in that case.
-func (h *Handler) mutateVisiblePost(c *gin.Context, mutate func(context.Context, *ent.Tx, *ent.Post) error) {
+// transaction, commit, run the optional after hook with the refreshed post,
+// and respond. Aborts with 401 when unauthenticated; never invokes mutate in
+// that case.
+func (h *Handler) mutateVisiblePost(c *gin.Context, mutate func(context.Context, *ent.Tx, *ent.Post) error, after func(context.Context, *ent.Post)) {
 	viewerID := auth.UserID(c)
 	if viewerID == "" {
 		httpx.Abort(c, httpx.Unauthorized(""))
@@ -91,10 +103,10 @@ func (h *Handler) mutateVisiblePost(c *gin.Context, mutate func(context.Context,
 	if !ok {
 		return
 	}
-	h.runPostMutation(c, ctx, p, viewerID, mutate)
+	h.runPostMutation(c, ctx, p, viewerID, mutate, after)
 }
 
-func (h *Handler) runPostMutation(c *gin.Context, ctx context.Context, p *ent.Post, viewerID string, mutate func(context.Context, *ent.Tx, *ent.Post) error) {
+func (h *Handler) runPostMutation(c *gin.Context, ctx context.Context, p *ent.Post, viewerID string, mutate func(context.Context, *ent.Tx, *ent.Post) error, after func(context.Context, *ent.Post)) {
 	tx, err := dao.Client().Tx(ctx)
 	if err != nil {
 		httpx.Abort(c, httpx.Internal("begin tx: "+err.Error()))
@@ -114,6 +126,9 @@ func (h *Handler) runPostMutation(c *gin.Context, ctx context.Context, p *ent.Po
 	if err != nil {
 		httpx.Abort(c, httpx.Internal("load post: "+err.Error()))
 		return
+	}
+	if after != nil {
+		after(ctx, fresh)
 	}
 	resp, err := h.toResponse(ctx, fresh, viewerID)
 	if err != nil {
@@ -369,11 +384,8 @@ func applyBookmarkCursor(ctx context.Context, query *ent.BookmarkQuery, cursor s
 	return query.Where(bookmarkKeyset(false, row)).All(ctx)
 }
 
-// userSummariesByIDs builds UserSummary values in the given ID order,
-// batch-loading users and follow status in two queries. Users that vanished
-// since liking are silently skipped (consistent with comment lists).
-// userSummariesByIDs delegates to connections.SummariesByIDs so the batch
+// userSummariesByIDs delegates to users.SummariesByIDs so the batch
 // user + is_following loading logic lives in one place.
-func userSummariesByIDs(ctx context.Context, ids []string, viewerID string) ([]connections.UserSummary, error) {
-	return connections.SummariesByIDs(ctx, ids, viewerID)
+func userSummariesByIDs(ctx context.Context, ids []string, viewerID string) ([]users.UserSummary, error) {
+	return users.SummariesByIDs(ctx, ids, viewerID)
 }

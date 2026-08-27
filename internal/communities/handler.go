@@ -11,12 +11,12 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/kongken/ohome/internal/auth"
-	"github.com/kongken/ohome/internal/connections"
 	"github.com/kongken/ohome/internal/dao"
 	"github.com/kongken/ohome/internal/dao/ent"
 	entcommunity "github.com/kongken/ohome/internal/dao/ent/community"
 	entmembership "github.com/kongken/ohome/internal/dao/ent/membership"
 	"github.com/kongken/ohome/internal/httpx"
+	"github.com/kongken/ohome/internal/users"
 )
 
 // Handler bundles community HTTP handlers.
@@ -239,7 +239,7 @@ func (h *Handler) listMembers(c *gin.Context) {
 	for i, r := range rows {
 		ids[i] = r.UserID
 	}
-	summaries, err := connections.SummariesByIDs(ctx, ids, viewerID)
+	summaries, err := users.SummariesByIDs(ctx, ids, viewerID)
 	if err != nil {
 		httpx.Abort(c, httpx.Internal("load members: "+err.Error()))
 		return

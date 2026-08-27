@@ -19,6 +19,7 @@ import (
 	entpost "github.com/kongken/ohome/internal/dao/ent/post"
 	entuser "github.com/kongken/ohome/internal/dao/ent/user"
 	"github.com/kongken/ohome/internal/httpx"
+	"github.com/kongken/ohome/internal/notifications"
 )
 
 // RegisterComments wires comment routes onto `/api/v1`.
@@ -138,7 +139,7 @@ func (h *Handler) createComment(c *gin.Context) {
 		return
 	}
 
-	var parentID string
+	var parentID, parentAuthorID string
 	if parentInput != "" {
 		parent, err := baseCommentQuery().Where(entcomment.IDEQ(parentInput)).Only(ctx)
 		if err != nil || parent.PostID != p.ID {
@@ -146,6 +147,7 @@ func (h *Handler) createComment(c *gin.Context) {
 			return
 		}
 		parentID = threadParent(parent)
+		parentAuthorID = parent.AuthorID
 	}
 
 	tx, err := dao.Client().Tx(ctx)
@@ -175,6 +177,18 @@ func (h *Handler) createComment(c *gin.Context) {
 	if err := tx.Commit(); err != nil {
 		httpx.Abort(c, httpx.Internal("commit: "+err.Error()))
 		return
+	}
+
+	// Best-effort notifications: post author plus the replied-to comment's
+	// author; self-notifications are skipped by the service.
+	for _, r := range []string{p.AuthorID, parentAuthorID} {
+		if r == "" || r == viewerID {
+			continue
+		}
+		notifications.TryNotify(ctx, notifications.Input{
+			UserID: r, Type: notifications.TypeComment,
+			ActorID: viewerID, PostID: p.ID,
+		})
 	}
 
 	author, err := dao.Client().User.Query().Where(entuser.IDEQ(viewerID)).Only(ctx)

@@ -22,7 +22,7 @@
 | 6. Communities | ✅ | ✅ | ✅ | ✅ | 🚧 |
 | 7. Discovery | ✅ | ⬜ | ⬜ | ⬜ | ⬜ |
 | 7.1 Search | ✅ | ⬜ | ⬜ | ⬜ | ⬜ |
-| 8. Notifications | ✅ | ⬜ | ⬜ | ⬜ | ⬜ |
+| 8. Notifications | ✅ | ✅ | ✅ | ✅ | 🚧 |
 | 9. Messages | ✅ | ⬜ | ⬜ | ⬜ | ⬜ |
 | 10. Dashboard | ✅ | ⬜ | ⬜ | ⬜ | ⬜ |
 | 11. Settings | ✅ | ⬜ | ⬜ | ⬜ | ⬜ |
@@ -98,7 +98,7 @@
 
 | Collection | 文档形状 | 索引 | 状态 |
 |---|---|---|:-:|
-| `notifications` | `{_id, user_id, type, actor, target_*, payload, created_at, read_at}` | `(user_id, created_at desc)`、`read_at` TTL | ⬜ |
+| `notifications` | `{_id, user_id, type, actor_id, post_id, target_user_id, text, payload, created_at, read_at}` | `(user_id, created_at desc)`、`read_at` TTL(30d) | ✅ 索引启动时创建 |
 | `conversations` | `{_id, participants[], last_message, unread:{user_id:int}}` | `participants` | ⬜ |
 | `messages` | `{_id, conversation_id, sender_id, content, attachments[], created_at, read_by[]}` | `(conversation_id, created_at desc)` | ⬜ |
 | `devices` | `{_id, user_id, platform, token, last_seen_at}` | `user_id`、`token` 唯一 | ⬜ |
@@ -283,11 +283,13 @@ DAO helper 入口：`internal/dao/media.go` (`MediaClient()` / `MediaBucketName(
 
 | Method | Path | 状态 |
 |---|---|:-:|
-| GET    | `/notifications` | ⬜ |
-| GET    | `/notifications/unread-count` | ⬜ |
-| POST   | `/notifications/{id}/read` | ⬜ |
-| POST   | `/notifications/read-all` | ⬜ |
-| DELETE | `/notifications/{id}` | ⬜ |
+| GET    | `/notifications` | ✅ `unread=true`、`type=` 过滤；base64 游标分页（created_at+_id keyset） |
+| GET    | `/notifications/unread-count` | ✅ read_at 不存在的文档计数 |
+| POST   | `/notifications/{id}/read` | ✅ 仅限本人；幂等 |
+| POST   | `/notifications/read-all` | ✅ 批量置读 |
+| DELETE | `/notifications/{id}` | ✅ 仅限本人 |
+
+实现：`internal/notifications/{model,service,handler}.go`；存储在 Mongo `ohome.notifications`（butterfly `store.mongo.default`），启动时建 `(user_id, created_at desc)` 索引与 `read_at` TTL（已读后 30 天自动清理）。事件触发已接入：点赞、分享、评论（含被回复者）、关注——通过 `notifications.TryNotify` 尽力投递，自身动作不通知。
 
 ---
 
